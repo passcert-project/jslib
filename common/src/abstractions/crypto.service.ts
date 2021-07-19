@@ -55,4 +55,7 @@ export abstract class CryptoService {
     decryptFromBytes: (encBuf: ArrayBuffer, key: SymmetricCryptoKey) => Promise<ArrayBuffer>;
     randomNumber: (min: number, max: number) => Promise<number>;
     validateKey: (key: SymmetricCryptoKey) => Promise<boolean>;
+
+    makeKeyWithArrayBuffer: (masterPassword: ArrayBuffer, email: string, kdf: KdfType, kdfIterations: number) => Promise<SymmetricCryptoKey>;
+    hashPasswordWithArrayBuffer: (masterPassword: ArrayBuffer, key: SymmetricCryptoKey, hashPurpose?: HashPurpose) => Promise<string>;
 }

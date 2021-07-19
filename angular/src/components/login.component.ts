@@ -80,9 +80,33 @@ export class LoginComponent implements OnInit {
             return;
         }
 
+        //TEST: Testing stuff
+        let masterPasswordBuffer : ArrayBuffer;
+        masterPasswordBuffer = Utils.fromUtf8ToArray(this.masterPassword).buffer;
+        
+        let test2 : ArrayBuffer;
+        test2 = Utils.fromUtf8ToArray('lole');
+        
+        //console.log('Are test and test2 the same? Should be false: ' + (test === test2));
+        //console.log('Pre-clean:' + test + '. Data: ' + Utils.fromBufferToUtf8(test));
+        
+        let testArrayView = new Int8Array(masterPasswordBuffer);
+        //testArrayView.fill(123);
+
+        //console.log('Are these two the same memory address? ' + (testArrayView.buffer === test));
+        console.log('After-clean:' + masterPasswordBuffer + '. Data: ' + Utils.fromBufferToUtf8(masterPasswordBuffer));
+
         try {
-            this.formPromise = this.authService.logIn(this.email, this.masterPassword);
+            //this.formPromise = this.authService.logIn(this.email, this.masterPassword);
+            //console.log('AuthService: ' + this.authService);
+            this.formPromise = this.authService.logInWithArrayBuffer(this.email, masterPasswordBuffer);
+            
+            
+
             const response = await this.formPromise;
+            
+            console.log(this.formPromise);
+
             await this.storageService.save(Keys.rememberEmail, this.rememberEmail);
             if (this.rememberEmail) {
                 await this.storageService.save(Keys.rememberedEmail, this.email);
@@ -107,7 +131,9 @@ export class LoginComponent implements OnInit {
                     this.router.navigate([this.successRoute]);
                 }
             }
-        } catch { }
+        } catch (error) {
+            console.error('THERE WAS AN EXCEPTION RETARD ' + error);
+         }
     }
 
     togglePassword() {

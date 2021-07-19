@@ -364,6 +364,22 @@ export class CryptoService implements CryptoServiceAbstraction {
         return new SymmetricCryptoKey(key);
     }
 
+    async makeKeyWithArrayBuffer(password: ArrayBuffer, salt: string, kdf: KdfType, kdfIterations: number):
+        Promise<SymmetricCryptoKey> {
+        let key: ArrayBuffer = null;
+        if (kdf == null || kdf === KdfType.PBKDF2_SHA256) {
+            if (kdfIterations == null) {
+                kdfIterations = 5000;
+            } else if (kdfIterations < 5000) {
+                throw new Error('PBKDF2 iteration minimum is 5000.');
+            }
+            key = await this.cryptoFunctionService.pbkdf2(password, salt, 'sha256', kdfIterations);
+        } else {
+            throw new Error('Unknown Kdf.');
+        }
+        return new SymmetricCryptoKey(key);
+    }
+
     async makeKeyFromPin(pin: string, salt: string, kdf: KdfType, kdfIterations: number,
         protectedKeyCs: EncString = null):
         Promise<SymmetricCryptoKey> {
@@ -404,6 +420,19 @@ export class CryptoService implements CryptoServiceAbstraction {
     }
 
     async hashPassword(password: string, key: SymmetricCryptoKey, hashPurpose?: HashPurpose): Promise<string> {
+        if (key == null) {
+            key = await this.getKey();
+        }
+        if (password == null || key == null) {
+            throw new Error('Invalid parameters.');
+        }
+
+        const iterations = hashPurpose === HashPurpose.LocalAuthorization ? 2 : 1;
+        const hash = await this.cryptoFunctionService.pbkdf2(key.key, password, 'sha256', iterations);
+        return Utils.fromBufferToB64(hash);
+    }
+
+    async hashPasswordWithArrayBuffer(password: ArrayBuffer, key: SymmetricCryptoKey, hashPurpose?: HashPurpose): Promise<string> {
         if (key == null) {
             key = await this.getKey();
         }

@@ -130,6 +130,16 @@ export class AuthService implements AuthServiceAbstraction {
             key, null, null, null);
     }
 
+    async logInWithArrayBuffer(email: string, masterPassword: ArrayBuffer): Promise<AuthResult> {
+        this.selectedTwoFactorProviderType = null;
+        const key = await this.makePreloginKeyWithArrayBuffer(masterPassword, email);
+        const hashedPassword = await this.cryptoService.hashPasswordWithArrayBuffer(masterPassword, key);
+        const localHashedPassword = await this.cryptoService.hashPasswordWithArrayBuffer(masterPassword, key,
+            HashPurpose.LocalAuthorization);
+        return await this.logInHelper(email, hashedPassword, localHashedPassword, null, null, null, null, null,
+            key, null, null, null);
+    }
+
     async logInSso(code: string, codeVerifier: string, redirectUrl: string): Promise<AuthResult> {
         this.selectedTwoFactorProviderType = null;
         return await this.logInHelper(null, null, null, code, codeVerifier, redirectUrl, null, null,
@@ -257,6 +267,25 @@ export class AuthService implements AuthServiceAbstraction {
         }
         return this.cryptoService.makeKey(masterPassword, email, kdf, kdfIterations);
     }
+
+    async makePreloginKeyWithArrayBuffer(masterPassword: ArrayBuffer, email: string): Promise<SymmetricCryptoKey> {
+        email = email.trim().toLowerCase();
+        let kdf: KdfType = null;
+        let kdfIterations: number = null;
+        try {
+            const preloginResponse = await this.apiService.postPrelogin(new PreloginRequest(email));
+            if (preloginResponse != null) {
+                kdf = preloginResponse.kdf;
+                kdfIterations = preloginResponse.kdfIterations;
+            }
+        } catch (e) {
+            if (e == null || e.statusCode !== 404) {
+                throw e;
+            }
+        }
+        return this.cryptoService.makeKeyWithArrayBuffer(masterPassword, email, kdf, kdfIterations);
+    }
+
 
     authingWithApiKey(): boolean {
         return this.clientId != null && this.clientSecret != null;
