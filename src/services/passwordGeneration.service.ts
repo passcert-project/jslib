@@ -15,6 +15,7 @@ import { StorageService } from '../abstractions/storage.service';
 import { EEFLongWordList } from '../misc/wordlist';
 
 import { PolicyType } from '../enums/policyType';
+import { exec } from 'child_process';
 
 const DefaultOptions = {
     length: 14,
@@ -54,8 +55,15 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
 
         console.log("WEBSITE PASSWORD CONSTRAINT -> ", this.smartPasswordOptions);
         console.log("I RECEIVED THIS -> ", options);
+        let password: string;
+        const child = exec('../.././pwGenJasmine.out -a 14 1 14 1 14 1 14 1 14');
+        child.stdout.on('data', (data: string) => {
+            password = data.split(' ')[2].substr(0, 14);
+            console.log(password);
+        })
 
-        let o: any;
+        return password;
+        /* let o: any;
         if (options['type'] === 'smartpassword') {
             console.log("Client wants a smartpassword");
             o = Object.assign({}, DefaultOptions, this.smartPasswordOptions);
@@ -162,7 +170,7 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
             password += positionChars.charAt(randomCharIndex);
         }
 
-        return password;
+        return password; */
     }
 
     async generatePassphrase(options: any): Promise<string> {
