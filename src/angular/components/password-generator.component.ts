@@ -39,6 +39,7 @@ export class PasswordGeneratorComponent implements OnInit {
         this.avoidAmbiguous = !this.options.ambiguous;
         this.options.type = this.options.type === 'passphrase' ? 'passphrase' : 'password';
         this.password = await this.passwordGenerationService.generatePassword(this.options);
+        console.log("@ngOnInit => password is this => ", this.password);
         await this.passwordGenerationService.addHistory(this.password);
     }
 

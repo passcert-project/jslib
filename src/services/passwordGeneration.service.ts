@@ -15,8 +15,8 @@ import { StorageService } from '../abstractions/storage.service';
 import { EEFLongWordList } from '../misc/wordlist';
 
 import { PolicyType } from '../enums/policyType';
-import { exec } from 'child_process';
-
+// import https from 'https';
+import axios from 'axios';
 const DefaultOptions = {
     length: 14,
     ambiguous: false,
@@ -53,15 +53,28 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
 
     async generatePassword(options: any): Promise<string> {
 
+        let o: any;
+        if (options['type'] === 'smartpassword') {
+            console.log("Client wants a smartpassword");
+            o = Object.assign({}, DefaultOptions, this.smartPasswordOptions);
+            console.log("these are the default smartpassword -> ", o);
+        } else {
+            o = Object.assign({}, DefaultOptions, options);
+        }
+
         console.log("WEBSITE PASSWORD CONSTRAINT -> ", this.smartPasswordOptions);
         console.log("I RECEIVED THIS -> ", options);
         let password: string;
-        const child = exec('../.././pwGenJasmine.out -a 14 1 14 1 14 1 14 1 14');
-        child.stdout.on('data', (data: string) => {
-            password = data.split(' ')[2].substr(0, 14);
-            console.log(password);
-        })
-
+        let pwPolicy = this.parsePolicyForPasscertGenerator(o);
+        await axios.post('http://localhost:5000/generate', {
+            pw_settings: pwPolicy
+        }).then(res => {
+            password = res.data.generated_password;
+            console.log("RECEIVED THIS FROM THE SERVER => ", res.data.generated_password);
+        }).catch(error => {
+            console.log("ERROR => ", error)
+        });
+        console.log("THIS IS THE PASSWORD @ SERVICE => ", password);
         return password;
         /* let o: any;
         if (options['type'] === 'smartpassword') {
@@ -171,6 +184,18 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         }
 
         return password; */
+    }
+
+    private parsePolicyForPasscertGenerator(options: any): string {
+        let policyBuilder: string;
+        policyBuilder = `${options.length} `;
+
+        policyBuilder += options.lowercase ? `${options.minLowercase} ${options.length} ` : `0 0 `;
+        policyBuilder += options.uppercase ? `${options.minUppercase} ${options.length} ` : `0 0 `;
+        policyBuilder += options.number ? `${options.minNumber} ${options.length} ` : `0 0 `;
+        policyBuilder += options.special ? `${options.minSpecial} ${options.length}` : `0 0`;
+        console.log("parsePolicyForPasscert => ", policyBuilder);
+        return policyBuilder;
     }
 
     async generatePassphrase(options: any): Promise<string> {
