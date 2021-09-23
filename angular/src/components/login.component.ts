@@ -80,41 +80,27 @@ export class LoginComponent implements OnInit {
             return;
         }
 
-        //TEST: Testing stuff
-        let masterPasswordBuffer : ArrayBuffer;
+        //Copy the Master Password into a mutable data structure as soon as possible
+        //TODO: Maybe do the checks above in array buffer
+        let masterPasswordBuffer: ArrayBuffer;
         masterPasswordBuffer = Utils.fromUtf8ToArray(this.masterPassword).buffer;
-        
-        let test2 : ArrayBuffer;
-        test2 = Utils.fromUtf8ToArray('lole');
-        
-        //console.log('Are test and test2 the same? Should be false: ' + (test === test2));
-        //console.log('Pre-clean:' + test + '. Data: ' + Utils.fromBufferToUtf8(test));
-        
-        let testArrayView = new Uint8Array(masterPasswordBuffer);
-        //testArrayView.fill(123);
 
-        //console.log('Are these two the same memory address? ' + (testArrayView.buffer === test));
+        //Once we have the password in the buffer, we don't need to keep it referenced. Hopefully the GC picks it up soon.
+        //Though not guaranteed :(
+        this.masterPassword = null;
+
+        let masterPasswordBufferView = new Uint8Array(masterPasswordBuffer);
 
         try {
             //this.formPromise = this.authService.logIn(this.email, this.masterPassword);
             //console.log('AuthService: ' + this.authService);
             this.formPromise = this.authService.logInWithArrayBuffer(this.email, masterPasswordBuffer);
-            
+
             const response = await this.formPromise;
 
+            //NOTE: Clearing password buffer here. Don't think it's needed anymore
+            this.clearArrayBufferToDEAD(masterPasswordBufferView);
 
-             //NOTE: Clearing password buffer here. Don't think it's needed anymore)
-            //This clears the password to DEAD (just easy to look for in memory dumps)
-            for(let i = 0; i < testArrayView.length; i += 4)
-            {
-                testArrayView[0 + i] = 68;
-                testArrayView[1 + i] = 69;
-                testArrayView[2 + i] = 65;
-                testArrayView[3 + i] = 68;
-            }
-            
-            
-            
             console.log('After-clean:' + masterPasswordBuffer + '. Data: ' + Utils.fromBufferToUtf8(masterPasswordBuffer));
 
             await this.storageService.save(Keys.rememberEmail, this.rememberEmail);
@@ -142,8 +128,8 @@ export class LoginComponent implements OnInit {
                 }
             }
         } catch (error) {
-            console.error('THERE WAS AN EXCEPTION RETARD ' + error);
-         }
+            console.error('THERE WAS AN EXCEPTION: ' + error);
+        }
     }
 
     togglePassword() {
@@ -182,5 +168,32 @@ export class LoginComponent implements OnInit {
 
     protected focusInput() {
         document.getElementById(this.email == null || this.email === '' ? 'email' : 'masterPassword').focus();
+    }
+
+    clearArrayBufferToDEAD(buffer: Uint8Array) {
+        const leftover = buffer.length % 4;
+        const leftoverStartIndex = buffer.length - leftover;
+
+        //This clears the password to DEAD (just easy to look for in memory dumps)
+        for (let i = 0; i < buffer.length - 4; i += 4) {
+            buffer[i + 0] = 68;
+            buffer[i + 1] = 69;
+            buffer[i + 2] = 65;
+            buffer[i + 3] = 68;
+        }
+
+        switch(leftover) {
+            case 3: {
+                buffer[leftoverStartIndex + 2] = 65;
+            }
+            case 2: {
+                buffer[leftoverStartIndex + 1] = 69;
+            }
+            case 1: {
+                buffer[leftoverStartIndex + 2] = 68;
+                break;
+            }
+
+        }
     }
 }
