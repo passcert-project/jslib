@@ -21,13 +21,15 @@ import { ConstantsService } from 'jslib-common/services/constants.service';
 
 import { Utils } from 'jslib-common/misc/utils';
 
+import { CaptchaProtectedComponent } from './captchaProtected.component';
+
 const Keys = {
     rememberedEmail: 'rememberedEmail',
     rememberEmail: 'rememberEmail',
 };
 
 @Directive()
-export class LoginComponent implements OnInit {
+export class LoginComponent extends CaptchaProtectedComponent implements OnInit {
     @Input() email: string = '';
     @Input() rememberEmail = true;
 
@@ -37,15 +39,19 @@ export class LoginComponent implements OnInit {
     onSuccessfulLogin: () => Promise<any>;
     onSuccessfulLoginNavigate: () => Promise<any>;
     onSuccessfulLoginTwoFactorNavigate: () => Promise<any>;
+    onSuccessfulLoginForceResetNavigate: () => Promise<any>;
 
     protected twoFactorRoute = '2fa';
     protected successRoute = 'vault';
+    protected forcePasswordResetRoute = 'update-temp-password';
 
     constructor(protected authService: AuthService, protected router: Router,
-        protected platformUtilsService: PlatformUtilsService, protected i18nService: I18nService,
-        protected stateService: StateService, protected environmentService: EnvironmentService,
+        platformUtilsService: PlatformUtilsService, i18nService: I18nService,
+        protected stateService: StateService, environmentService: EnvironmentService,
         protected passwordGenerationService: PasswordGenerationService,
-        protected cryptoFunctionService: CryptoFunctionService, private storageService: StorageService) { }
+        protected cryptoFunctionService: CryptoFunctionService, private storageService: StorageService) {
+        super(environmentService, i18nService, platformUtilsService);
+    }
 
     async ngOnInit() {
         if (this.email == null || this.email === '') {
@@ -64,6 +70,8 @@ export class LoginComponent implements OnInit {
     }
 
     async submit() {
+        await this.setupCaptcha();
+
         if (this.email == null || this.email === '') {
             this.platformUtilsService.showToast('error', this.i18nService.t('errorOccurred'),
                 this.i18nService.t('emailRequired'));
@@ -109,11 +117,19 @@ export class LoginComponent implements OnInit {
             } else {
                 await this.storageService.remove(Keys.rememberedEmail);
             }
-            if (response.twoFactor) {
+            if (this.handleCaptchaRequired(response)) {
+                return;
+            } else if (response.twoFactor) {
                 if (this.onSuccessfulLoginTwoFactorNavigate != null) {
                     this.onSuccessfulLoginTwoFactorNavigate();
                 } else {
                     this.router.navigate([this.twoFactorRoute]);
+                }
+            } else if (response.forcePasswordReset) {
+                if (this.onSuccessfulLoginForceResetNavigate != null) {
+                    this.onSuccessfulLoginForceResetNavigate();
+                } else {
+                    this.router.navigate([this.forcePasswordResetRoute]);
                 }
             } else {
                 const disableFavicon = await this.storageService.get<boolean>(ConstantsService.disableFaviconKey);
@@ -157,8 +173,7 @@ export class LoginComponent implements OnInit {
         await this.storageService.save(ConstantsService.ssoCodeVerifierKey, ssoCodeVerifier);
 
         // Build URI
-        const webUrl = this.environmentService.getWebVaultUrl() == null ? 'https://vault.bitwarden.com' :
-            this.environmentService.getWebVaultUrl();
+        const webUrl = this.environmentService.getWebVaultUrl();
 
         // Launch browser
         this.platformUtilsService.launchUri(webUrl + '/#/sso?clientId=' + clientId +

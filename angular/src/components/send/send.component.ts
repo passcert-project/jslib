@@ -51,15 +51,7 @@ export class SendComponent implements OnInit {
         protected policyService: PolicyService, protected userService: UserService) { }
 
     async ngOnInit() {
-        const policies = await this.policyService.getAll(PolicyType.DisableSend);
-        const organizations = await this.userService.getAllOrganizations();
-        this.disableSend = organizations.some(o => {
-            return o.enabled &&
-                o.status === OrganizationUserStatusType.Confirmed &&
-                o.usePolicies &&
-                !o.canManagePolicies &&
-                policies.some(p => p.organizationId === o.id && p.enabled);
-        });
+        this.disableSend = await this.policyService.policyAppliesToUser(PolicyType.DisableSend);
     }
 
     async load(filter: (send: SendView) => boolean = null) {
@@ -170,11 +162,7 @@ export class SendComponent implements OnInit {
     }
 
     copy(s: SendView) {
-        let sendLinkBaseUrl = 'https://send.bitwarden.com/#';
-        const webVaultUrl = this.environmentService.getWebVaultUrl();
-        if (webVaultUrl != null) {
-            sendLinkBaseUrl = webVaultUrl + '/#/send/';
-        }
+        const sendLinkBaseUrl = this.environmentService.getSendUrl();
         const link = sendLinkBaseUrl + s.accessId + '/' + s.urlB64Key;
         this.platformUtilsService.copyToClipboard(link);
         this.platformUtilsService.showToast('success', null,
