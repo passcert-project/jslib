@@ -1,6 +1,7 @@
 import {
     Directive,
     Input,
+    OnDestroy,
     OnInit,
 } from '@angular/core';
 
@@ -29,7 +30,7 @@ const Keys = {
 };
 
 @Directive()
-export class LoginComponent extends CaptchaProtectedComponent implements OnInit {
+export class LoginComponent extends CaptchaProtectedComponent implements OnInit, OnDestroy {
     @Input() email: string = '';
     @Input() rememberEmail = true;
 
@@ -67,6 +68,12 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit 
         if (Utils.isBrowser && !Utils.isNode) {
             this.focusInput();
         }
+
+        console.log(Utils.debugStringWithTimestamp('LoginComponent: OnInit'));
+    }
+
+    async ngOnDestroy() {
+        console.log(Utils.debugStringWithTimestamp('LoginComponent: OnDestroy'));
     }
 
     async submit() {
@@ -187,28 +194,31 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit 
 
     clearArrayBufferToDEAD(buffer: Uint8Array) {
         const leftover = buffer.length % 4;
-        const leftoverStartIndex = buffer.length - leftover;
 
         //This clears the password to DEAD (just easy to look for in memory dumps)
-        for (let i = 0; i < buffer.length - 4; i += 4) {
+        for (let i = 0; i < buffer.length - leftover; i += 4) {
             buffer[i + 0] = 68;
             buffer[i + 1] = 69;
             buffer[i + 2] = 65;
             buffer[i + 3] = 68;
         }
 
-        switch(leftover) {
+        switch (leftover) {
             case 3: {
-                buffer[leftoverStartIndex + 2] = 65;
-            }
-            case 2: {
-                buffer[leftoverStartIndex + 1] = 69;
-            }
-            case 1: {
-                buffer[leftoverStartIndex + 2] = 68;
+                buffer[buffer.length - 3] = 68;
+                buffer[buffer.length - 2] = 69;
+                buffer[buffer.length - 1] = 65;
                 break;
             }
-
+            case 2: {
+                buffer[buffer.length - 2] = 68;
+                buffer[buffer.length - 1] = 69;
+                break;
+            }
+            case 1: {
+                buffer[buffer.length - 1] = 68;
+                break;
+            }
         }
     }
 }

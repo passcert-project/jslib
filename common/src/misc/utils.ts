@@ -1,3 +1,4 @@
+import { debug } from 'console';
 import * as tldjs from 'tldjs';
 
 import { I18nService } from '../abstractions/i18n.service';
@@ -30,6 +31,12 @@ export class Utils {
         Utils.isMobileBrowser = Utils.isBrowser && this.isMobile(window);
         Utils.isAppleMobileBrowser = Utils.isBrowser && this.isAppleMobile(window);
         Utils.global = Utils.isNativeScript ? global : (Utils.isNode && !Utils.isBrowser ? global : window);
+    }
+
+    static debugStringWithTimestamp(debugText: string) : string {
+        var timestamp = new Date().toLocaleString();
+
+        return debugText + ":" + timestamp;
     }
 
     static fromB64ToArray(str: string): Uint8Array {
