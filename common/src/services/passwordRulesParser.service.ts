@@ -1,4 +1,4 @@
-import { NamedCharacterData, RuleData } from '@passcert/pwrules-annotations';
+import { NamedCharacterData, PasswordBlocklist, RuleData, } from '@passcert/pwrules-annotations';
 import { PasswordRulesParserService as PasswordRulesParserServiceAbstraction } from '../abstractions/passwordRulesParser.service';
 
 const Identifier = {
@@ -10,12 +10,19 @@ const Identifier = {
     UPPER: 'upper',
 };
 
+const BlockListIdentifier = {
+    HIBP: "hibp",
+    DEFAULT: "default",
+}
+
 const RuleName = {
-    ALLOWED: 'allowed',
-    MAX_CONSECUTIVE: 'max-consecutive',
-    REQUIRED: 'required',
-    MIN_LENGTH: 'minlength',
-    MAX_LENGTH: 'maxlength',
+    ALLOWED: "allowed",
+    MAX_CONSECUTIVE: "max-consecutive",
+    REQUIRED: "required",
+    MIN_LENGTH: "minlength",
+    MAX_LENGTH: "maxlength",
+    MIN_CLASSES: "minclasses",
+    BLOCK_LIST: "blocklist",
 };
 
 const PwDefaultOptions = {
@@ -46,6 +53,9 @@ let pwMinUppercase: number = 0;
 let pwMinLowercase: number = 0;
 let pwMinSpecial: number = 0;
 
+let pwMinClasses: number = 1;
+let pwBlocklist: string[] = [];
+
 /* tslint:disable:no-string-literal */
 export class PasswordRulesParserService implements PasswordRulesParserServiceAbstraction {
 
@@ -63,6 +73,15 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
                     break;
                 case RuleName.REQUIRED:
                     this.applyPasswordRules(r.value, true);
+                    break;
+                case RuleName.MIN_CLASSES:
+                    pwMinClasses = r.value;
+                    break;
+                case RuleName.BLOCK_LIST:
+                    let blist = PasswordBlocklist.getInstance();
+                    // TODO: maybe just read here instead of the parser having the blocklisted words already
+                    // FIXME: Only works for default for now. To work with HIBP, it would have to be at the generation of the pw. Here would just go the value to let the generation service know what to do.
+                    pwBlocklist = r.value;
                     break;
             }
         });
@@ -88,6 +107,8 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
             allowedUpper: pwCanHaveUppercase,
             allowedLower: pwCanHaveLowercase,
             allowedSpecial: pwCanHaveSpecial,
+            minClasses: pwMinClasses,
+            blocklist: pwBlocklist
         };
 
         const aux = Object.assign({}, PwDefaultOptions, siteOptions);
@@ -205,6 +226,8 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
                         break;
                 }
             }
+
+            //TODO: CustomCharacterClasses
         });
     }
 }

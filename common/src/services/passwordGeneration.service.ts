@@ -15,6 +15,7 @@ import { StorageService } from '../abstractions/storage.service';
 import { EEFLongWordList } from '../misc/wordlist';
 
 import { PolicyType } from '../enums/policyType';
+import { exit } from 'process';
 
 const DefaultOptions = {
     length: 14,
@@ -65,7 +66,16 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
             return this.generatePassphrase(options);
         }
 
-        // sanitize
+        let isPwCompliant = false;
+        let password = '';
+        while (!isPwCompliant) {
+            password = await this.generatePasswordInternal(o);
+            isPwCompliant = await this.checkPasswordCompliance(o, password);
+        }
+
+        return password;
+
+        /* // sanitize
         this.sanitizePasswordLength(o, true);
 
         const minLength: number = o.minUppercase + o.minLowercase + o.minNumber + o.minSpecial;
@@ -158,8 +168,8 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
             const randomCharIndex = await this.cryptoService.randomNumber(0, positionChars.length - 1);
             password += positionChars.charAt(randomCharIndex);
         }
+ */
 
-        return password;
     }
 
     async generatePassphrase(options: any): Promise<string> {
@@ -606,5 +616,166 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         });
         aux = Object.assign({}, { websiteConstraints: siteConstraints['websiteConstraints'], websiteOptions: aux });
         return aux;
+    }
+
+    private async generatePasswordInternal(passwordParameters: any): Promise<string> {
+        // sanitize
+        this.sanitizePasswordLength(passwordParameters, true);
+
+        const minLength: number = passwordParameters.minUppercase + passwordParameters.minLowercase + passwordParameters.minNumber + passwordParameters.minSpecial;
+        if (passwordParameters.length < minLength) {
+            passwordParameters.length = minLength;
+        }
+
+        const positions: string[] = [];
+        if (passwordParameters.lowercase && passwordParameters.minLowercase > 0) {
+            for (let i = 0; i < passwordParameters.minLowercase; i++) {
+                positions.push('l');
+            }
+        }
+        if (passwordParameters.uppercase && passwordParameters.minUppercase > 0) {
+            for (let i = 0; i < passwordParameters.minUppercase; i++) {
+                positions.push('u');
+            }
+        }
+        if (passwordParameters.number && passwordParameters.minNumber > 0) {
+            for (let i = 0; i < passwordParameters.minNumber; i++) {
+                positions.push('n');
+            }
+        }
+        if (passwordParameters.special && passwordParameters.minSpecial > 0) {
+            for (let i = 0; i < passwordParameters.minSpecial; i++) {
+                positions.push('s');
+            }
+        }
+        while (positions.length < passwordParameters.length) {
+            positions.push('a');
+        }
+
+        // shuffle
+        await this.shuffleArray(positions);
+
+        // build out the char sets
+        let allCharSet = '';
+        let lowercaseCharSet = 'abcdefghijkmnopqrstuvwxyz';
+        if (passwordParameters.ambiguous) {
+            lowercaseCharSet += 'l';
+        }
+        if (passwordParameters.lowercase) {
+            allCharSet += lowercaseCharSet;
+        }
+
+        let uppercaseCharSet = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+        if (passwordParameters.ambiguous) {
+            uppercaseCharSet += 'IO';
+        }
+        if (passwordParameters.uppercase) {
+            allCharSet += uppercaseCharSet;
+        }
+
+        let numberCharSet = '23456789';
+        if (passwordParameters.ambiguous) {
+            numberCharSet += '01';
+        }
+        if (passwordParameters.number) {
+            allCharSet += numberCharSet;
+        }
+
+        const specialCharSet = '!@#$%^&*';
+        if (passwordParameters.special) {
+            allCharSet += specialCharSet;
+        }
+
+        let password = '';
+        for (let i = 0; i < passwordParameters.length; i++) {
+            let positionChars: string;
+            switch (positions[i]) {
+                case 'l':
+                    positionChars = lowercaseCharSet;
+                    break;
+                case 'u':
+                    positionChars = uppercaseCharSet;
+                    break;
+                case 'n':
+                    positionChars = numberCharSet;
+                    break;
+                case 's':
+                    positionChars = specialCharSet;
+                    break;
+                case 'a':
+                    positionChars = allCharSet;
+                    break;
+                default:
+                    break;
+            }
+
+            const randomCharIndex = await this.cryptoService.randomNumber(0, positionChars.length - 1);
+            password += positionChars.charAt(randomCharIndex);
+        }
+
+        return password;
+    }
+
+    private async checkPasswordCompliance(passwordContraints: any, password: string): Promise<boolean> {
+        // TODO: now need to check the constraints:
+        // - maxRange for each character / character class
+        // - blocklist
+        // - minclasses
+        // if one of them is noncompliant, call the method again
+        let passedBlocklistConstraints = false;
+        let passedMinClassesConstraints = false;
+        let passedMaxRangeConstraints = false;
+
+        const lowercaseCharSet = 'abcdefghijklmnopqrstuvwxyz';
+        const uppercaseCharSet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const numberCharSet = '0123456789';
+        const specialCharSet = '!@#$%^&*';
+
+        let hasLower = 0;
+        let hasUpper = 0;
+        let hasDigit = 0;
+        let hasSpecial = 0;
+
+        const blocklist: string[] = passwordContraints.blocklist;
+        for (let bl of blocklist) {
+            if (password.includes(bl)) {
+                passedBlocklistConstraints = false;
+                break;
+            }
+        }
+        passedBlocklistConstraints = true;
+
+        // check for the minclasses constraint
+        for (let lowerIdx of lowercaseCharSet) {
+            if (password.includes(lowerIdx)) {
+                hasLower = 1;
+                break;
+            }
+        }
+        for (let upperIdx of uppercaseCharSet) {
+            if (password.includes(upperIdx)) {
+                hasUpper = 1;
+                break;
+            }
+        }
+        for (let digitIdx of numberCharSet) {
+            if (password.includes(digitIdx)) {
+                hasDigit = 1;
+                break;
+            }
+        }
+        for (let specialIdx of specialCharSet) {
+            if (password.includes(specialIdx)) {
+                hasSpecial = 1;
+                break;
+            }
+        }
+
+        passedMinClassesConstraints = hasSpecial + hasDigit + hasUpper + hasLower >= passwordContraints.minClasses;
+
+
+
+
+        return passedBlocklistConstraints && passedMaxRangeConstraints && passedMinClassesConstraints;
     }
 }
