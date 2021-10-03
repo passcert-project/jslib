@@ -1,4 +1,4 @@
-import { NamedCharacterData, PasswordBlocklist, RuleData, } from '@passcert/pwrules-annotations';
+import { CustomCharacterData, NamedCharacterData, PasswordBlocklist, RuleData, } from '@passcert/pwrules-annotations';
 import { PasswordRulesParserService as PasswordRulesParserServiceAbstraction } from '../abstractions/passwordRulesParser.service';
 
 const Identifier = {
@@ -53,8 +53,17 @@ let pwMinUppercase: number = 0;
 let pwMinLowercase: number = 0;
 let pwMinSpecial: number = 0;
 
+let pwMaxNumbers: number = 0;
+let pwMaxUppercase: number = 0;
+let pwMaxLowercase: number = 0;
+let pwMaxSpecial: number = 0;
+
 let pwMinClasses: number = 1;
 let pwBlocklist: string[] = [];
+
+let requiredCustom: RuleData[] = [];
+let allowedCustom: CustomCharacterData[] = [];
+
 
 /* tslint:disable:no-string-literal */
 export class PasswordRulesParserService implements PasswordRulesParserServiceAbstraction {
@@ -69,10 +78,10 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
                     // do nothing for now, doesn't seem to be this option in bitwarden
                     break;
                 case RuleName.ALLOWED:
-                    this.applyPasswordRules(r.value);
+                    this.applyPasswordRules(r);
                     break;
                 case RuleName.REQUIRED:
-                    this.applyPasswordRules(r.value, true);
+                    this.applyPasswordRules(r, true);
                     break;
                 case RuleName.MIN_CLASSES:
                     pwMinClasses = r.value;
@@ -108,7 +117,13 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
             allowedLower: pwCanHaveLowercase,
             allowedSpecial: pwCanHaveSpecial,
             minClasses: pwMinClasses,
-            blocklist: pwBlocklist
+            blocklist: pwBlocklist,
+            reqCustom: requiredCustom,
+            allowedCustom: allowedCustom,
+            maxNumber: pwMaxNumbers,
+            maxUppercase: pwMaxUppercase,
+            maxLowercase: pwMaxLowercase,
+            maxSpecial: pwMaxSpecial,
         };
 
         const aux = Object.assign({}, PwDefaultOptions, siteOptions);
@@ -125,6 +140,17 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
         pwMinUppercase = 0;
         pwMinLowercase = 0;
         pwMinSpecial = 0;
+
+        pwMaxNumbers = 0;
+        pwMaxUppercase = 0;
+        pwMaxLowercase = 0;
+        pwMaxSpecial = 0;
+
+        pwMinClasses = 1;
+        pwBlocklist = [];
+
+        requiredCustom = [];
+        allowedCustom = [];
     }
 
 
@@ -170,44 +196,66 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
         return lengthObj;
     }
 
-    private applyPasswordRules(rules: any[], required: boolean = false): void {
+    private applyPasswordRules(rule: RuleData, required: boolean = false): void {
 
         let requiredValue = 0;
         if (required) {
             requiredValue = 1;
         }
-        rules.forEach(charClass => {
+
+        rule.value.forEach((charClass: NamedCharacterData | CustomCharacterData) => {
             if (charClass instanceof NamedCharacterData) {
                 switch (charClass.name) {
                     case Identifier.LOWER:
                         pwCanHaveLowercase = true;
-                        // if it's equal to 1, means it's required -> must have at least one
-                        if (pwMinLowercase < 1) {
+                        // check for minChars. If it's undefined, then set to the default value: 1 for required, 0 for allowed.
+                        if (charClass.minChars !== undefined) {
+                            pwMinLowercase = Number(charClass.minChars);
+                            pwMaxLowercase = Number(charClass.maxChars);
+                        } else if (pwMinLowercase < 1) {
+                            // there is no maxChars by "default"
                             pwMinLowercase = requiredValue;
                         }
+
                         break;
                     case Identifier.DIGIT:
                         pwCanHaveNumbers = true;
 
-                        if (pwMinNumbers < 1) {
+                        if (charClass.minChars !== undefined) {
+                            pwMinNumbers = Number(charClass.minChars);
+                            pwMaxNumbers = Number(charClass.maxChars);
+                        } else if (pwMinNumbers < 1) {
+                            // there is no maxChars by "default"
                             pwMinNumbers = requiredValue;
                         }
                         break;
                     case Identifier.UPPER:
                         pwCanHaveUppercase = true;
 
-                        if (pwMinUppercase < 1) {
+                        if (charClass.minChars !== undefined) {
+                            console.log("UPPER => ", charClass);
+                            pwMinUppercase = Number(charClass.minChars);
+                            console.log(pwMinUppercase);
+                            pwMaxUppercase = Number(charClass.maxChars);
+                            console.log(pwMaxUppercase);
+                        } else if (pwMinUppercase < 1) {
+                            // there is no maxChars by "default"
                             pwMinUppercase = requiredValue;
                         }
                         break;
                     case Identifier.SPECIAL:
                         pwCanHaveSpecial = true;
-                        if (pwMinSpecial < 1) {
+                        if (charClass.minChars !== undefined) {
+                            pwMinSpecial = Number(charClass.minChars);
+                            pwMaxSpecial = Number(charClass.maxChars);
+                        } else if (pwMinSpecial < 1) {
+                            // there is no maxChars by "default"
                             pwMinSpecial = requiredValue;
                         }
                         break;
                     case Identifier.ASCII_PRINTABLE:
                         pwCanHaveLowercase = true;
+                        // not possible to set min or max range, so stays the default.
                         if (pwMinLowercase < 1) {
                             pwMinLowercase = requiredValue;
                         }
@@ -226,8 +274,18 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
                         break;
                 }
             }
-
-            //TODO: CustomCharacterClasses
+            else if (charClass instanceof CustomCharacterData) {
+                if (required) {
+                    // push the rule, it will be easier to handle 'required: u, l;' cases 
+                    let ruleAlreadyExists = requiredCustom.findIndex(x => x.name === rule.name && x.value === rule.value);
+                    if (ruleAlreadyExists === -1) {
+                        requiredCustom.push(rule);
+                    }
+                } else {
+                    // TODO: maybe needs to be adapted as the one above
+                    allowedCustom.push(charClass);
+                }
+            }
         });
     }
 }

@@ -15,7 +15,6 @@ import { StorageService } from '../abstractions/storage.service';
 import { EEFLongWordList } from '../misc/wordlist';
 
 import { PolicyType } from '../enums/policyType';
-import { exit } from 'process';
 
 const DefaultOptions = {
     length: 14,
@@ -53,11 +52,13 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         private policyService: PolicyService) { }
 
     async generatePassword(options: any): Promise<string> {
-
-
         let o: any;
         if (options['type'] === 'smartpassword') {
-            o = Object.assign({}, DefaultOptions, this.smartPasswordOptions);
+            console.log("I WANT SMART PASSWORD");
+            console.log("SMART PASSWORD OPTIONS => ", this.smartPasswordOptions);
+            o = Object.assign({}, this.smartPasswordOptions);
+            //o = { ...this.smartPasswordOptions };
+            console.log("0 1st => ", o);
         } else {
             o = Object.assign({}, DefaultOptions, options);
         }
@@ -65,13 +66,18 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         if (o.type === 'passphrase') {
             return this.generatePassphrase(options);
         }
-
+        console.log("O 2nd => ", o);
         let isPwCompliant = false;
         let password = '';
-        while (!isPwCompliant) {
-            password = await this.generatePasswordInternal(o);
-            isPwCompliant = await this.checkPasswordCompliance(o, password);
+        password = await this.generatePasswordInternal(o);
+
+        if (o.type === 'smartpassword') {
+            let test = await this.checkPasswordCompliance(o, password);
+            console.log("test IS COMPLIANT => ", test);
         }
+        /* while (!isPwCompliant) {
+            isPwCompliant = await this.checkPasswordCompliance(o, password);
+        } */
 
         return password;
 
@@ -494,6 +500,7 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
 
     setWebsitePasswordRules(constraints: any) {
         // check if the options are from a website constraint
+        console.log("SET WEBSITE PRULES => ", constraints);
         this.smartPasswordOptions = Object.assign({}, constraints);
     }
 
@@ -553,6 +560,7 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
     }
 
     private sanitizePasswordLength(options: any, forGeneration: boolean) {
+        console.log("@sanitize => ", options);
         let minUppercaseCalc = 0;
         let minLowercaseCalc = 0;
         let minNumberCalc: number = options.minNumber;
@@ -594,12 +602,13 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         }
 
         // Apply other changes if the options object passed in is for generation
-        if (forGeneration) {
+        // FIXME: this was here originally, but now is not needed, because we have ranges.
+        /* if (forGeneration) {
             options.minUppercase = minUppercaseCalc;
             options.minLowercase = minLowercaseCalc;
             options.minNumber = minNumberCalc;
             options.minSpecial = minSpecialCalc;
-        }
+        } */
     }
 
     private compareWebsiteConstraintsWithDefault(siteConstraints: any, defaultOptions: any): any {
@@ -619,6 +628,7 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
     }
 
     private async generatePasswordInternal(passwordParameters: any): Promise<string> {
+        console.log("GENERATE => ", passwordParameters);
         // sanitize
         this.sanitizePasswordLength(passwordParameters, true);
 
@@ -722,9 +732,10 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         // - blocklist
         // - minclasses
         // if one of them is noncompliant, call the method again
-        let passedBlocklistConstraints = false;
+        console.log("passwordContraints => ", passwordContraints);
+        let passedBlocklistConstraints = true; // assuming the pw generated never hits the blocklist.
         let passedMinClassesConstraints = false;
-        let passedMaxRangeConstraints = false;
+        let passedRangeConstraints = true; // assuming the pw generated checks all constraints. Easier to turn to false when it doesn't.
 
         const lowercaseCharSet = 'abcdefghijklmnopqrstuvwxyz';
         const uppercaseCharSet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -736,46 +747,144 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         let hasDigit = 0;
         let hasSpecial = 0;
 
-        const blocklist: string[] = passwordContraints.blocklist;
-        for (let bl of blocklist) {
-            if (password.includes(bl)) {
+        for (let blw of passwordContraints.blocklist) {
+            if (password.includes(blw)) {
                 passedBlocklistConstraints = false;
                 break;
             }
         }
-        passedBlocklistConstraints = true;
+        console.log("PASSBLOCKLIST => ", passedBlocklistConstraints);
 
         // check for the minclasses constraint
-        for (let lowerIdx of lowercaseCharSet) {
-            if (password.includes(lowerIdx)) {
-                hasLower = 1;
-                break;
+        let countLower = 0;
+        let lowerInPw: string[] = []
+        let countUpper = 0;
+        let upperInPw: string[] = []
+        let countNumber = 0;
+        let numberInPw: string[] = []
+        let countSpecial = 0;
+        let specialInPw: string[] = []
+
+        for (let pwChar of password) {
+            if (lowercaseCharSet.includes(pwChar)) {
+                countLower++;
+                lowerInPw.push(pwChar);
+            } else if (uppercaseCharSet.includes(pwChar)) {
+                countUpper++;
+                upperInPw.push(pwChar);
+            } else if (numberCharSet.includes(pwChar)) {
+                countNumber++;
+                numberInPw.push(pwChar);
+            } else if (specialCharSet.includes(pwChar)) {
+                countSpecial++;
+                specialInPw.push(pwChar);
             }
         }
-        for (let upperIdx of uppercaseCharSet) {
-            if (password.includes(upperIdx)) {
-                hasUpper = 1;
-                break;
-            }
+
+        if (countLower > 0) {
+            hasLower = 1;
         }
-        for (let digitIdx of numberCharSet) {
-            if (password.includes(digitIdx)) {
-                hasDigit = 1;
-                break;
-            }
+
+        if (countUpper > 0) {
+            hasUpper = 1;
         }
-        for (let specialIdx of specialCharSet) {
-            if (password.includes(specialIdx)) {
-                hasSpecial = 1;
-                break;
-            }
+
+        if (countNumber > 0) {
+            hasDigit = 1;
+        }
+
+        if (countSpecial > 0) {
+            hasSpecial = 1;
         }
 
         passedMinClassesConstraints = hasSpecial + hasDigit + hasUpper + hasLower >= passwordContraints.minClasses;
+        console.log("sum of classes => ", hasSpecial + hasDigit + hasUpper + hasLower);
+        console.log("passedMinClassesConstraints => ", passedMinClassesConstraints);
+        console.log(lowerInPw);
+        console.log(upperInPw);
+        console.log(numberInPw);
+        console.log(specialInPw);
+
+        // separated the chars of the password into classes, and their number of occorrences
+        // need to check ranges and custom characters
+        // maybe it's a good time to enforce the required:a,b !== required: a; required: b;
+
+        // check for named classes
+        if (lowerInPw.length < passwordContraints.minLowercase || lowerInPw.length > passwordContraints.maxLowercase) {
+            passedRangeConstraints = false;
+        }
+        if (upperInPw.length < passwordContraints.minLowercase || upperInPw.length > passwordContraints.maxLowercase) {
+            passedRangeConstraints = false;
+        }
+        if (numberInPw.length < passwordContraints.minLowercase || numberInPw.length > passwordContraints.maxLowercase) {
+            passedRangeConstraints = false;
+        }
+        if (specialInPw.length < passwordContraints.minLowercase || specialInPw.length > passwordContraints.maxLowercase) {
+            passedRangeConstraints = false;
+        }
+
+        let specialDisjunctionPassed = true;
+        let mandatoryChars: string[] = [];
+        let disjuntiveChars: string[] = [];
+
+        // check for required custom characters
+        if (passwordContraints.reqCustom.length > 0) {
+            // go through each custom required rule constraint
+            for (let reqCustom of passwordContraints.reqCustom) {
+                let valuesInsideRequiredRule = reqCustom.value.length;
+
+                // go through each CustomCharacterData object, and get the characters required and the range.
+                for (let charClasses of reqCustom.value) {
+                    let chars = charClasses.characters.join('');
+                    console.log("CHARS => ", chars)
+                    console.log(valuesInsideRequiredRule);
+                    // case 'required: [a], [b];'
+                    if (valuesInsideRequiredRule > 1) {
+                        disjuntiveChars.push(chars);
+                    } else {
+                        mandatoryChars.push(chars);
+                    }
+                }
+            }
+            console.log("mandatory Custom Chars => ", mandatoryChars);
+            console.log("disjuntive Custom Chars => ", disjuntiveChars);
+
+            let mandatoryCharCount = 0;
+            let disjuntiveCharCount = 0;
+
+            // check for the existence of required characters in the password.
+            // need to check for the cases of 'required:[a], [b];' -> a or b, but not both!
+            for (let char of password) {
+                if (mandatoryChars.includes(char)) {
+                    mandatoryCharCount++;
+                }
+            }
+
+            // each position directly coresponds to a set of disjuntive chars.
+            // if its true, this set is used at least once in the password.
+            // if the whole array is true, then there's an inconsistency.
+            let checkMultipleDisjuntiveCharsUsage: boolean[] = [];
+            for (let i = 0; i < disjuntiveChars.length; i++) {
+                checkMultipleDisjuntiveCharsUsage[i] = false;
+                for (let j = 0; j < disjuntiveChars[i].length; j++) {
+                    if (password.includes(disjuntiveChars[i][j])) {
+                        // one occurence of the disjuntive chars. This will be used in case there are ranges involved.
+                        disjuntiveCharCount++;
+                        checkMultipleDisjuntiveCharsUsage[i] = true;
+                    }
+                }
+            }
+            console.log("IS IT ALL TRUE => ", checkMultipleDisjuntiveCharsUsage);
+
+
+            /* if (mandatoryCharCount < charClasses.minChars || mandatoryCharCount > charClasses.maxChars) {
+                passedRangeConstraints = false;
+            } */
+        }
 
 
 
 
-        return passedBlocklistConstraints && passedMaxRangeConstraints && passedMinClassesConstraints;
+        return passedBlocklistConstraints && passedRangeConstraints && passedMinClassesConstraints;
     }
 }
