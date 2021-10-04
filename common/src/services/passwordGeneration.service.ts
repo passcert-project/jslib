@@ -15,6 +15,8 @@ import { StorageService } from '../abstractions/storage.service';
 import { EEFLongWordList } from '../misc/wordlist';
 
 import { PolicyType } from '../enums/policyType';
+import { CustomCharacterData, RuleData } from '@passcert/pwrules-annotations';
+import { ConsoleLogger } from '@microsoft/signalr/dist/esm/Utils';
 
 const DefaultOptions = {
     length: 14,
@@ -629,98 +631,368 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
 
     private async generatePasswordInternal(passwordParameters: any): Promise<string> {
         console.log("GENERATE => ", passwordParameters);
+
+        let password = '';
         // sanitize
         this.sanitizePasswordLength(passwordParameters, true);
 
         const minLength: number = passwordParameters.minUppercase + passwordParameters.minLowercase + passwordParameters.minNumber + passwordParameters.minSpecial;
-        if (passwordParameters.length < minLength) {
-            passwordParameters.length = minLength;
-        }
 
-        const positions: string[] = [];
-        if (passwordParameters.lowercase && passwordParameters.minLowercase > 0) {
-            for (let i = 0; i < passwordParameters.minLowercase; i++) {
-                positions.push('l');
-            }
-        }
-        if (passwordParameters.uppercase && passwordParameters.minUppercase > 0) {
-            for (let i = 0; i < passwordParameters.minUppercase; i++) {
-                positions.push('u');
-            }
-        }
-        if (passwordParameters.number && passwordParameters.minNumber > 0) {
-            for (let i = 0; i < passwordParameters.minNumber; i++) {
-                positions.push('n');
-            }
-        }
-        if (passwordParameters.special && passwordParameters.minSpecial > 0) {
-            for (let i = 0; i < passwordParameters.minSpecial; i++) {
-                positions.push('s');
-            }
-        }
-        while (positions.length < passwordParameters.length) {
-            positions.push('a');
-        }
+        if (passwordParameters.type === 'smartpassword') {
+            let customRule: RuleData;
+            let customCharsMinLength: number = 0;
+            let customConstraintsList: any[] = [];
+            for (customRule of passwordParameters.reqCustom) {
+                let charData: CustomCharacterData;
+                for (charData of customRule.value) {
+                    let constraints: any = {};
+                    console.log("CHAR DATA => ", charData);
+                    if (charData.minChars !== undefined) {
+                        customCharsMinLength += Number(charData.minChars);
+                        constraints.minChars = Number(charData.minChars);
+                        constraints.maxChars = Number(charData.maxChars);
+                    } else {
+                        constraints.minChars = undefined;
+                        constraints.maxChars = undefined;
+                    }
+                    // case 'required: [ab], [cd];' -> one or the other, but not both
+                    if (customRule.value.length > 1) {
+                        constraints.disjuncChars = charData.characters.join('');
+                        console.log("CONSTRAINT CHARS => ", constraints.disjuncChars);
 
-        // shuffle
-        await this.shuffleArray(positions);
-
-        // build out the char sets
-        let allCharSet = '';
-        let lowercaseCharSet = 'abcdefghijkmnopqrstuvwxyz';
-        if (passwordParameters.ambiguous) {
-            lowercaseCharSet += 'l';
-        }
-        if (passwordParameters.lowercase) {
-            allCharSet += lowercaseCharSet;
-        }
-
-        let uppercaseCharSet = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-        if (passwordParameters.ambiguous) {
-            uppercaseCharSet += 'IO';
-        }
-        if (passwordParameters.uppercase) {
-            allCharSet += uppercaseCharSet;
-        }
-
-        let numberCharSet = '23456789';
-        if (passwordParameters.ambiguous) {
-            numberCharSet += '01';
-        }
-        if (passwordParameters.number) {
-            allCharSet += numberCharSet;
-        }
-
-        const specialCharSet = '!@#$%^&*';
-        if (passwordParameters.special) {
-            allCharSet += specialCharSet;
-        }
-
-        let password = '';
-        for (let i = 0; i < passwordParameters.length; i++) {
-            let positionChars: string;
-            switch (positions[i]) {
-                case 'l':
-                    positionChars = lowercaseCharSet;
-                    break;
-                case 'u':
-                    positionChars = uppercaseCharSet;
-                    break;
-                case 'n':
-                    positionChars = numberCharSet;
-                    break;
-                case 's':
-                    positionChars = specialCharSet;
-                    break;
-                case 'a':
-                    positionChars = allCharSet;
-                    break;
-                default:
-                    break;
+                    } else {
+                        constraints.characters = charData.characters.join('');
+                        console.log("CONSTRAINT CHARS => ", constraints.characters);
+                    }
+                    customConstraintsList.push(constraints);
+                }
             }
 
-            const randomCharIndex = await this.cryptoService.randomNumber(0, positionChars.length - 1);
-            password += positionChars.charAt(randomCharIndex);
+            console.log("CONSTRAINTS => ", customConstraintsList);
+            console.log("CUSTOM LENGTH => ", customCharsMinLength);
+            console.log("minlength => ", minLength + customCharsMinLength);
+            if (passwordParameters.length < minLength + customCharsMinLength) {
+                passwordParameters.length = minLength + customCharsMinLength;
+            }
+
+            const positions: string[] = [];
+
+            // first, use the named classes
+            if (passwordParameters.lowercase && passwordParameters.minLowercase > 0) {
+                for (let i = 0; i < passwordParameters.minLowercase; i++) {
+                    positions.push('l');
+                }
+            }
+            if (passwordParameters.uppercase && passwordParameters.minUppercase > 0) {
+                for (let i = 0; i < passwordParameters.minUppercase; i++) {
+                    positions.push('u');
+                }
+            }
+            if (passwordParameters.number && passwordParameters.minNumber > 0) {
+                for (let i = 0; i < passwordParameters.minNumber; i++) {
+                    positions.push('n');
+                }
+            }
+            if (passwordParameters.special && passwordParameters.minSpecial > 0) {
+                for (let i = 0; i < passwordParameters.minSpecial; i++) {
+                    positions.push('s');
+                }
+            }
+
+            let customMandatorySet = '';
+            for (let x of customConstraintsList) {
+                if (x.hasOwnProperty('characters')) {
+                    customMandatorySet += x.characters;
+                    for (let i = 0; i < x.minChars; i++) {
+                        //let randomRequiredChar = await this.cryptoService.randomNumber(0, x.characters.length - 1);
+                        positions.push('m');
+                    }
+                }
+            }
+
+            console.log("MANDATORY CHARS => ", customMandatorySet);
+
+            // get the disjunct sets, pick a random number and remove it from the list.
+            // this removed set will be the one used in the password.
+            // the remaining sets need to be known to removed respective chars from the generation possibilities
+            let disjunctList = customConstraintsList.filter(x => x.hasOwnProperty('disjuncChars'));
+            let mandatoryList = customConstraintsList.filter(x => x.hasOwnProperty('characters'));
+            console.log("disjunct LIST => ", disjunctList);
+            console.log("mandatory LIST => ", mandatoryList);
+
+            // get a random number to select which will be chosen for the required value.
+            let randomDisjunctSet = await this.cryptoService.randomNumber(0, disjunctList.length - 1);
+            let chosenDisjunctSet = Object.assign([], disjunctList);
+            chosenDisjunctSet = chosenDisjunctSet.splice(randomDisjunctSet, 1);
+            console.log("CHOSEN => ", chosenDisjunctSet);
+            for (let i = 0; i < chosenDisjunctSet[0].minChars; i++) {
+                positions.push('r');
+            }
+
+            // fill the rest of the generation array
+            while (positions.length < passwordParameters.length) {
+                positions.push('a');
+            }
+
+            console.log("POSITION => ", positions);
+
+            // shuffle
+            await this.shuffleArray(positions);
+
+            // build out the char sets
+            let allCharSet = '';
+            let lowercaseCharSet = 'abcdefghijklmnopqrstuvwxyz';
+            /* if (passwordParameters.ambiguous) {
+                lowercaseCharSet += 'l';
+            } */
+            if (passwordParameters.lowercase) {
+                allCharSet += lowercaseCharSet;
+            }
+
+            let uppercaseCharSet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            /* if (passwordParameters.ambiguous) {
+                uppercaseCharSet += 'IO';
+            } */
+            if (passwordParameters.uppercase) {
+                allCharSet += uppercaseCharSet;
+            }
+
+            let numberCharSet = '0123456789';
+            /* if (passwordParameters.ambiguous) {
+                numberCharSet += '01';
+            } */
+            if (passwordParameters.number) {
+                allCharSet += numberCharSet;
+            }
+
+            let specialCharSet = '!@#$%^&*';
+            if (passwordParameters.special) {
+                allCharSet += specialCharSet;
+            }
+
+            // remove all the 'required: [a], [b];' chars from allCharSet.
+            // create a new set that will be needed when substituting 'r' for the actual char.
+            // this new set will contain the chosen disjunctive set -> either [a] or [b]
+            // remove the mandatory chars also, because they are already complying with minlength and minChars range
+            let disjunctCharsSet = '';
+            for (let setObj of disjunctList) {
+                console.log("SET OBJ DISJUNCT => ", setObj);
+                console.log("LENGTH OBJ DISJUNCT => ", setObj.disjuncChars.length);
+                for (let i = 0; i < setObj.disjuncChars.length; i++) {
+                    let idx = allCharSet.indexOf(setObj.disjuncChars[i]);
+                    if (idx !== -1) {
+                        // found a match, remove from allCharSet.
+                        let tmp = allCharSet.split('');
+                        let charToDelete = tmp.splice(idx, 1);
+                        allCharSet = tmp.join('');
+
+                        // delete from other sets, so they are not used accidentallby
+                        let idxLower = lowercaseCharSet.indexOf(charToDelete[0]);
+                        let idxUpper = uppercaseCharSet.indexOf(charToDelete[0]);
+                        let idxDigit = numberCharSet.indexOf(charToDelete[0]);
+                        let idxSpecial = specialCharSet.indexOf(charToDelete[0]);
+                        if (idxLower !== -1) {
+                            let tmp2 = lowercaseCharSet.split('');
+                            tmp2.splice(idxLower, 1);
+                            lowercaseCharSet = tmp2.join('');
+                        }
+                        if (idxUpper !== -1) {
+                            let tmp2 = uppercaseCharSet.split('');
+                            tmp2.splice(idxUpper, 1);
+                            uppercaseCharSet = tmp2.join('');
+                        }
+                        if (idxDigit !== -1) {
+                            let tmp2 = numberCharSet.split('');
+                            tmp2.splice(idxDigit, 1);
+                            numberCharSet = tmp2.join('');
+                        }
+                        if (idxSpecial !== -1) {
+                            let tmp2 = specialCharSet.split('');
+                            tmp2.splice(idxSpecial, 1);
+                            specialCharSet = tmp2.join('');
+                        }
+                    }
+                }
+            }
+
+            for (let setObj of mandatoryList) {
+                console.log("SET OBJ MANDATORY => ", setObj);
+                console.log("LENGTH OBJ MANDATORY => ", setObj.characters.length);
+                for (let i = 0; i < setObj.characters.length; i++) {
+                    let idx = allCharSet.indexOf(setObj.characters[i]);
+                    if (idx !== -1) {
+                        // found a match
+                        let tmp = allCharSet.split('');
+                        let charToDelete = tmp.splice(idx, 1);
+
+                        allCharSet = tmp.join('');
+                        // delete from other sets
+                        let idxLower = lowercaseCharSet.indexOf(charToDelete[0]);
+                        let idxUpper = uppercaseCharSet.indexOf(charToDelete[0]);
+                        let idxDigit = numberCharSet.indexOf(charToDelete[0]);
+                        let idxSpecial = specialCharSet.indexOf(charToDelete[0]);
+                        if (idxLower !== -1) {
+                            let tmp2 = lowercaseCharSet.split('');
+                            tmp2.splice(idxLower, 1);
+                            lowercaseCharSet = tmp2.join('');
+                        }
+                        if (idxUpper !== -1) {
+                            let tmp2 = uppercaseCharSet.split('');
+                            tmp2.splice(idxUpper, 1);
+                            uppercaseCharSet = tmp2.join('');
+                        }
+                        if (idxDigit !== -1) {
+                            let tmp2 = numberCharSet.split('');
+                            tmp2.splice(idxDigit, 1);
+                            numberCharSet = tmp2.join('');
+                        }
+                        if (idxSpecial !== -1) {
+                            let tmp2 = specialCharSet.split('');
+                            tmp2.splice(idxSpecial, 1);
+                            specialCharSet = tmp2.join('');
+                        }
+                    }
+                }
+            }
+
+            for (let i = 0; i < chosenDisjunctSet[0].disjuncChars.length; i++) {
+                disjunctCharsSet += chosenDisjunctSet[0].disjuncChars[i];
+            }
+
+            console.log("NEW CUSTOM SET => ", disjunctCharsSet);
+
+            console.log("ALL SET => ", allCharSet);
+
+            console.log("POSITIONS => ", positions);
+
+            for (let i = 0; i < passwordParameters.length; i++) {
+                let positionChars: string;
+                switch (positions[i]) {
+                    case 'l':
+                        positionChars = lowercaseCharSet;
+                        break;
+                    case 'u':
+                        positionChars = uppercaseCharSet;
+                        break;
+                    case 'n':
+                        positionChars = numberCharSet;
+                        break;
+                    case 's':
+                        positionChars = specialCharSet;
+                        break;
+                    case 'r':
+                        // required disjunct
+                        positionChars = disjunctCharsSet;
+                        break;
+                    case 'm':
+                        // required mandatory
+                        positionChars = customMandatorySet;
+                        break;
+                    case 'a':
+                        positionChars = allCharSet;
+                        break;
+                    default:
+                        break;
+                }
+
+                console.log("POSITION CHARS => ", positionChars);
+
+                const randomCharIndex = await this.cryptoService.randomNumber(0, positionChars.length - 1);
+                password += positionChars.charAt(randomCharIndex);
+
+            }
+        } else {
+
+            if (passwordParameters.length < minLength) {
+                passwordParameters.length = minLength;
+            }
+
+
+            const positions: string[] = [];
+            if (passwordParameters.lowercase && passwordParameters.minLowercase > 0) {
+                for (let i = 0; i < passwordParameters.minLowercase; i++) {
+                    positions.push('l');
+                }
+            }
+            if (passwordParameters.uppercase && passwordParameters.minUppercase > 0) {
+                for (let i = 0; i < passwordParameters.minUppercase; i++) {
+                    positions.push('u');
+                }
+            }
+            if (passwordParameters.number && passwordParameters.minNumber > 0) {
+                for (let i = 0; i < passwordParameters.minNumber; i++) {
+                    positions.push('n');
+                }
+            }
+            if (passwordParameters.special && passwordParameters.minSpecial > 0) {
+                for (let i = 0; i < passwordParameters.minSpecial; i++) {
+                    positions.push('s');
+                }
+            }
+
+            while (positions.length < passwordParameters.length) {
+                positions.push('a');
+            }
+
+            // shuffle
+            await this.shuffleArray(positions);
+
+            // build out the char sets
+            let allCharSet = '';
+            let lowercaseCharSet = 'abcdefghijkmnopqrstuvwxyz';
+            if (passwordParameters.ambiguous) {
+                lowercaseCharSet += 'l';
+            }
+            if (passwordParameters.lowercase) {
+                allCharSet += lowercaseCharSet;
+            }
+
+            let uppercaseCharSet = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+            if (passwordParameters.ambiguous) {
+                uppercaseCharSet += 'IO';
+            }
+            if (passwordParameters.uppercase) {
+                allCharSet += uppercaseCharSet;
+            }
+
+            let numberCharSet = '23456789';
+            if (passwordParameters.ambiguous) {
+                numberCharSet += '01';
+            }
+            if (passwordParameters.number) {
+                allCharSet += numberCharSet;
+            }
+
+            let specialCharSet = '!@#$%^&*';
+            if (passwordParameters.special) {
+                allCharSet += specialCharSet;
+            }
+
+            for (let i = 0; i < passwordParameters.length; i++) {
+                let positionChars: string;
+                switch (positions[i]) {
+                    case 'l':
+                        positionChars = lowercaseCharSet;
+                        break;
+                    case 'u':
+                        positionChars = uppercaseCharSet;
+                        break;
+                    case 'n':
+                        positionChars = numberCharSet;
+                        break;
+                    case 's':
+                        positionChars = specialCharSet;
+                        break;
+                    case 'a':
+                        positionChars = allCharSet;
+                        break;
+                    default:
+                        break;
+                }
+
+                const randomCharIndex = await this.cryptoService.randomNumber(0, positionChars.length - 1);
+                password += positionChars.charAt(randomCharIndex);
+            }
         }
 
         return password;
@@ -876,6 +1148,7 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
             }
             console.log("IS IT ALL TRUE => ", checkMultipleDisjuntiveCharsUsage);
 
+            //TODO: only need to check the ranges now :/
 
             /* if (mandatoryCharCount < charClasses.minChars || mandatoryCharCount > charClasses.maxChars) {
                 passedRangeConstraints = false;
