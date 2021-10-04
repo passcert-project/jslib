@@ -34,7 +34,8 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
     @Input() email: string = '';
     @Input() rememberEmail = true;
 
-    masterPassword: string = '';
+    //masterPassword: string = '';
+    masterPasswordBuffer : ArrayBuffer;
     showPassword: boolean = false;
     formPromise: Promise<AuthResult>;
     onSuccessfulLogin: () => Promise<any>;
@@ -89,34 +90,39 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
                 this.i18nService.t('invalidEmail'));
             return;
         }
-        if (this.masterPassword == null || this.masterPassword === '') {
+
+        //Check the arraypass we get from the child instead
+        if (this.masterPasswordBuffer == null || this.masterPasswordBuffer.byteLength === 0) {
             this.platformUtilsService.showToast('error', this.i18nService.t('errorOccurred'),
                 this.i18nService.t('masterPassRequired'));
             return;
         }
+        
+        /*#region NOTE: Old method. Now the child component takes care of it 
+            //Copy the Master Password into a mutable data structure as soon as possible
+            //let masterPasswordBuffer: ArrayBuffer; 
+            //masterPasswordBuffer = Utils.fromUtf8ToArray(this.masterPassword).buffer;
 
-        //Copy the Master Password into a mutable data structure as soon as possible
-        //TODO: Maybe do the checks above in array buffer
-        let masterPasswordBuffer: ArrayBuffer;
-        masterPasswordBuffer = Utils.fromUtf8ToArray(this.masterPassword).buffer;
+            //Once we have the password in the buffer, we don't need to keep it referenced. Hopefully the GC picks it up soon.
+            //Though not guaranteed :(
+            //TODO: This technically should no longer be needed since we don't actually touch the user input in this component (for the pass at least)
+            this.masterPassword = null;
+        */
 
-        //Once we have the password in the buffer, we don't need to keep it referenced. Hopefully the GC picks it up soon.
-        //Though not guaranteed :(
-        this.masterPassword = null;
-
-        let masterPasswordBufferView = new Uint8Array(masterPasswordBuffer);
+        let masterPasswordBufferView = new Uint8Array(this.masterPasswordBuffer);
 
         try {
             //this.formPromise = this.authService.logIn(this.email, this.masterPassword);
             //console.log('AuthService: ' + this.authService);
-            this.formPromise = this.authService.logInWithArrayBuffer(this.email, masterPasswordBuffer);
+            this.formPromise = this.authService.logInWithArrayBuffer(this.email, this.masterPasswordBuffer);
 
             const response = await this.formPromise;
 
-            //NOTE: Clearing password buffer here. Don't think it's needed anymore
+            //NOTE: Clearing password buffer here since it's needed anymore. It has to be after we receive the answer from the response
+            //since it's an async call.
             this.clearArrayBufferToDEAD(masterPasswordBufferView);
-
-            console.log('After-clean:' + masterPasswordBuffer + '. Data: ' + Utils.fromBufferToUtf8(masterPasswordBuffer));
+           
+            console.log('After-clean:' + Utils.fromBufferToUtf8(this.masterPasswordBuffer));
 
             await this.storageService.save(Keys.rememberEmail, this.rememberEmail);
             if (this.rememberEmail) {
@@ -220,5 +226,16 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
                 break;
             }
         }
+    }
+
+    receivePass(masterpass : ArrayBuffer)
+    {
+        this.masterPasswordBuffer = masterpass;
+        
+        const arrayBufferView = new Uint8Array(this.masterPasswordBuffer);
+
+        //console.log('Received pass from child: ' + arrayBufferView);
+
+        this.submit();
     }
 }
