@@ -755,6 +755,20 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                     allCharSet += specialCharSet;
                 }
 
+                //remove chosen Named class from allChars if chosen named class has minLength => it already will have its number filled
+                if (chosenDisjunctNamedClass.length > 0 && chosenDisjunctNamedClass[0].disjuncClasses === 'lower') {
+                    allCharSet = allCharSet.replace(lowercaseCharSet, '');
+                }
+                if (chosenDisjunctNamedClass.length > 0 && chosenDisjunctNamedClass[0].disjuncClasses === 'upper') {
+                    allCharSet = allCharSet.replace(uppercaseCharSet, '');
+                }
+                if (chosenDisjunctNamedClass.length > 0 && chosenDisjunctNamedClass[0].disjuncClasses === 'digit') {
+                    allCharSet = allCharSet.replace(numberCharSet, '');
+                }
+                if (chosenDisjunctNamedClass.length > 0 && chosenDisjunctNamedClass[0].disjuncClasses === 'special') {
+                    allCharSet = allCharSet.replace(specialCharSet, '');
+                }
+
                 // remove all the 'required: [a], [b];' chars from allCharSet.
                 // create a new set that will be needed when substituting 'r' for the actual char.
                 // this new set will contain the chosen disjunctive set -> either [a] or [b]
