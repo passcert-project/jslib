@@ -15,7 +15,7 @@ import { StorageService } from '../abstractions/storage.service';
 import { EEFLongWordList } from '../misc/wordlist';
 
 import { PolicyType } from '../enums/policyType';
-import { CustomCharacterData, RuleData } from '@passcert/pwrules-annotations';
+import { CustomCharacterData, NamedCharacterData, RuleData } from '@passcert/pwrules-annotations';
 import { ConsoleLogger } from '@microsoft/signalr/dist/esm/Utils';
 
 const DefaultOptions = {
@@ -68,111 +68,7 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         let password = '';
         password = await this.generatePasswordInternal(o);
 
-        /* if (o.type === 'smartpassword') {
-            let test = await this.checkPasswordCompliance(o, password);
-            console.log("test IS COMPLIANT => ", test);
-        } */
-        /* while (!isPwCompliant) {
-            isPwCompliant = await this.checkPasswordCompliance(o, password);
-        } */
-
         return password;
-
-        /* // sanitize
-        this.sanitizePasswordLength(o, true);
-
-        const minLength: number = o.minUppercase + o.minLowercase + o.minNumber + o.minSpecial;
-        if (o.length < minLength) {
-            o.length = minLength;
-        }
-
-        const positions: string[] = [];
-        if (o.lowercase && o.minLowercase > 0) {
-            for (let i = 0; i < o.minLowercase; i++) {
-                positions.push('l');
-            }
-        }
-        if (o.uppercase && o.minUppercase > 0) {
-            for (let i = 0; i < o.minUppercase; i++) {
-                positions.push('u');
-            }
-        }
-        if (o.number && o.minNumber > 0) {
-            for (let i = 0; i < o.minNumber; i++) {
-                positions.push('n');
-            }
-        }
-        if (o.special && o.minSpecial > 0) {
-            for (let i = 0; i < o.minSpecial; i++) {
-                positions.push('s');
-            }
-        }
-        while (positions.length < o.length) {
-            positions.push('a');
-        }
-
-        // shuffle
-        await this.shuffleArray(positions);
-
-        // build out the char sets
-        let allCharSet = '';
-        let lowercaseCharSet = 'abcdefghijkmnopqrstuvwxyz';
-        if (o.ambiguous) {
-            lowercaseCharSet += 'l';
-        }
-        if (o.lowercase) {
-            allCharSet += lowercaseCharSet;
-        }
-
-        let uppercaseCharSet = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-        if (o.ambiguous) {
-            uppercaseCharSet += 'IO';
-        }
-        if (o.uppercase) {
-            allCharSet += uppercaseCharSet;
-        }
-
-        let numberCharSet = '23456789';
-        if (o.ambiguous) {
-            numberCharSet += '01';
-        }
-        if (o.number) {
-            allCharSet += numberCharSet;
-        }
-
-        const specialCharSet = '!@#$%^&*';
-        if (o.special) {
-            allCharSet += specialCharSet;
-        }
-
-        let password = '';
-        for (let i = 0; i < o.length; i++) {
-            let positionChars: string;
-            switch (positions[i]) {
-                case 'l':
-                    positionChars = lowercaseCharSet;
-                    break;
-                case 'u':
-                    positionChars = uppercaseCharSet;
-                    break;
-                case 'n':
-                    positionChars = numberCharSet;
-                    break;
-                case 's':
-                    positionChars = specialCharSet;
-                    break;
-                case 'a':
-                    positionChars = allCharSet;
-                    break;
-                default:
-                    break;
-            }
-
-            const randomCharIndex = await this.cryptoService.randomNumber(0, positionChars.length - 1);
-            password += positionChars.charAt(randomCharIndex);
-        }
- */
-
     }
 
     async generatePassphrase(options: any): Promise<string> {
@@ -640,6 +536,70 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
             while (runGenerationAgain) {
                 password = '';
 
+                let namedRule: RuleData;
+                let namedCharsMinLength: number = 0;
+                let namedConstraintsList: any[] = [];
+
+                // separate all the required named classes into disjunct and regular classes. This is for later filtering and choosing randomly which class to use and which not to use, from the disjunct options
+                for (namedRule of passwordParameters.reqNamed) {
+                    let charData: NamedCharacterData;
+                    for (charData of namedRule.value) {
+                        let constraints: any = {};
+                        if (charData.minChars !== undefined) {
+                            namedCharsMinLength += Number(charData.minChars);
+                            constraints.minChars = Number(charData.minChars);
+                            constraints.maxChars = Number(charData.maxChars);
+                        } else {
+                            constraints.minChars = undefined;
+                            constraints.maxChars = undefined;
+                        }
+                        // case 'required: [ab], [cd];' -> one or the other, but not both
+                        if (namedRule.value.length > 1) {
+                            constraints.disjuncClasses = charData.name;
+                        } else {
+                            constraints.classes = charData.name;
+                        }
+                        namedConstraintsList.push(constraints);
+                    }
+                }
+                console.log("NAMED CONSTRAINTS => ", namedConstraintsList);
+
+                let disjunctNamedClasses = [];
+                disjunctNamedClasses = namedConstraintsList.filter(x => x.hasOwnProperty('disjuncClasses'));
+                let mandatoryNamedClass = [];
+                mandatoryNamedClass = namedConstraintsList.filter(x => x.hasOwnProperty('classes'));
+                let randomClassIndex = await this.cryptoService.randomNumber(0, disjunctNamedClasses.length - 1);
+                let chosenDisjunctNamedClass = Object.assign([], disjunctNamedClasses);
+                chosenDisjunctNamedClass = chosenDisjunctNamedClass.splice(randomClassIndex, 1);
+                console.log("DISJUNCT NAMED CLASSES => ", disjunctNamedClasses);
+                console.log("CHOSEN NAMED CLASS => ", chosenDisjunctNamedClass);
+                let leftOverNamedClasses = disjunctNamedClasses.filter(x => x.disjuncClasses !== chosenDisjunctNamedClass[0].disjuncClasses);
+                console.log("LEFT OVER NAMED CLASSES => ", leftOverNamedClasses);
+
+                // make the named class not available for usage, but setting it's boolean in the config to false
+                for (let dc of leftOverNamedClasses) {
+                    switch (dc.disjuncClasses) {
+                        case 'lower':
+                            passwordParameters.lowercase = false;
+                            passwordParameters.minLowercase = 0;
+                            break;
+                        case 'upper':
+                            passwordParameters.uppercase = false;
+                            passwordParameters.minUppercase = 0;
+                            break;
+                        case 'digit':
+                            passwordParameters.number = false;
+                            passwordParameters.minNumber = 0;
+                            break;
+                        case 'special':
+                            passwordParameters.special = false;
+                            passwordParameters.minSpecial = 0;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
                 let customRule: RuleData;
                 let customCharsMinLength: number = 0;
                 let customConstraintsList: any[] = [];
@@ -669,8 +629,8 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                 console.log("CONSTRAINTS => ", customConstraintsList);
                 console.log("CUSTOM LENGTH => ", customCharsMinLength);
                 console.log("minlength => ", minLength + customCharsMinLength);
-                if (passwordParameters.length < minLength + customCharsMinLength) {
-                    passwordParameters.length = minLength + customCharsMinLength;
+                if (passwordParameters.length < minLength + customCharsMinLength + namedCharsMinLength) {
+                    passwordParameters.length = minLength + customCharsMinLength + namedCharsMinLength;
                 }
 
                 const positions: string[] = [];
@@ -946,7 +906,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
             if (passwordParameters.length < minLength) {
                 passwordParameters.length = minLength;
             }
-
 
             const positions: string[] = [];
             if (passwordParameters.lowercase && passwordParameters.minLowercase > 0) {

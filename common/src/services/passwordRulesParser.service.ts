@@ -43,17 +43,17 @@ const PwDefaultOptions = {
     includeNumber: false,
 };
 
-let pwCanHaveNumbers: boolean = false;
+let pwCanHaveNumber: boolean = false;
 let pwCanHaveUppercase: boolean = false;
 let pwCanHaveLowercase: boolean = false;
 let pwCanHaveSpecial: boolean = false;
 
-let pwMinNumbers: number = 0;
+let pwMinNumber: number = 0;
 let pwMinUppercase: number = 0;
 let pwMinLowercase: number = 0;
 let pwMinSpecial: number = 0;
 
-let pwMaxNumbers: number = 0;
+let pwMaxNumber: number = 0;
 let pwMaxUppercase: number = 0;
 let pwMaxLowercase: number = 0;
 let pwMaxSpecial: number = 0;
@@ -64,6 +64,8 @@ let pwBlocklist: string[] = [];
 let requiredCustom: RuleData[] = [];
 let allowedCustom: CustomCharacterData[] = [];
 
+let requiredNamed: RuleData[] = [];
+let allowedNamed: NamedCharacterData[] = [];
 
 /* tslint:disable:no-string-literal */
 export class PasswordRulesParserService implements PasswordRulesParserServiceAbstraction {
@@ -97,8 +99,8 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
 
         const siteOptions = {
             length: lengthObj['length'],
-            number: pwCanHaveNumbers,
-            minNumber: pwMinNumbers,
+            number: pwCanHaveNumber,
+            minNumber: pwMinNumber,
             uppercase: pwCanHaveUppercase,
             minUppercase: pwMinUppercase,
             lowercase: pwCanHaveLowercase,
@@ -108,11 +110,11 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
             type: 'smartpassword',
             minLength: lengthObj['minLength'] !== 0 ? lengthObj['minLength'] : PwDefaultOptions['length'],
             maxLength: lengthObj['maxLength'] !== 0 ? lengthObj['maxLength'] : 128,
-            reqNumber: pwCanHaveNumbers && pwMinNumbers > 0,
+            reqNumber: pwCanHaveNumber && pwMinNumber > 0,
             reqUpper: pwCanHaveUppercase && pwMinUppercase > 0,
             reqLower: pwCanHaveLowercase && pwMinLowercase > 0,
             reqSpecial: pwCanHaveSpecial && pwMinSpecial > 0,
-            allowedNumber: pwCanHaveNumbers,
+            allowedNumber: pwCanHaveNumber,
             allowedUpper: pwCanHaveUppercase,
             allowedLower: pwCanHaveLowercase,
             allowedSpecial: pwCanHaveSpecial,
@@ -120,10 +122,12 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
             blocklist: pwBlocklist,
             reqCustom: requiredCustom,
             allowedCustom: allowedCustom,
-            maxNumber: pwMaxNumbers,
+            maxNumber: pwMaxNumber,
             maxUppercase: pwMaxUppercase,
             maxLowercase: pwMaxLowercase,
             maxSpecial: pwMaxSpecial,
+            reqNamed: requiredNamed,
+            allowedNamed: allowedNamed
         };
 
         const aux = Object.assign({}, PwDefaultOptions, siteOptions);
@@ -131,17 +135,17 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
     }
 
     resetRulesReferences(): void {
-        pwCanHaveNumbers = false;
+        pwCanHaveNumber = false;
         pwCanHaveUppercase = false;
         pwCanHaveLowercase = false;
         pwCanHaveSpecial = false;
 
-        pwMinNumbers = 0;
+        pwMinNumber = 0;
         pwMinUppercase = 0;
         pwMinLowercase = 0;
         pwMinSpecial = 0;
 
-        pwMaxNumbers = 0;
+        pwMaxNumber = 0;
         pwMaxUppercase = 0;
         pwMaxLowercase = 0;
         pwMaxSpecial = 0;
@@ -151,6 +155,9 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
 
         requiredCustom = [];
         allowedCustom = [];
+
+        requiredNamed = [];
+        allowedNamed = [];
     }
 
 
@@ -219,14 +226,14 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
                         }
                         break;
                     case Identifier.DIGIT:
-                        pwCanHaveNumbers = true;
+                        pwCanHaveNumber = true;
                         if (charClass.minChars !== undefined) {
-                            pwMinNumbers = Number(charClass.minChars);
-                            pwMaxNumbers = Number(charClass.maxChars);
-                        } else if (pwMinNumbers < 1) {
+                            pwMinNumber = Number(charClass.minChars);
+                            pwMaxNumber = Number(charClass.maxChars);
+                        } else if (pwMinNumber < 1) {
                             // there is no maxChars by "default"
-                            pwMinNumbers = requiredValue;
-                            pwMaxNumbers = pwLength;
+                            pwMinNumber = requiredValue;
+                            pwMaxNumber = pwLength;
                         }
                         break;
                     case Identifier.UPPER:
@@ -256,21 +263,37 @@ export class PasswordRulesParserService implements PasswordRulesParserServiceAbs
                         // not possible to set min or max range, so stays the default.
                         if (pwMinLowercase < 1) {
                             pwMinLowercase = requiredValue;
+                            pwMaxLowercase = pwLength;
                         }
-                        pwCanHaveNumbers = true;
-                        if (pwMinNumbers < 1) {
-                            pwMinNumbers = requiredValue;
+                        pwCanHaveNumber = true;
+                        if (pwMinNumber < 1) {
+                            pwMinNumber = requiredValue;
+                            pwMaxNumber = pwLength;
                         }
                         pwCanHaveUppercase = true;
                         if (pwMinUppercase < 1) {
                             pwMinUppercase = requiredValue;
+                            pwMaxUppercase = pwLength;
                         }
                         pwCanHaveSpecial = true;
                         if (pwMinSpecial < 1) {
                             pwMinSpecial = requiredValue;
+                            pwMaxSpecial = pwLength;
                         }
                         break;
                 }
+
+                if (required) {
+                    // push the rule, it will be easier to handle 'required: u, l;' cases 
+                    let ruleAlreadyExists = requiredNamed.findIndex(x => x.name === rule.name && x.value === rule.value);
+                    if (ruleAlreadyExists === -1) {
+                        requiredNamed.push(rule);
+                    }
+                } else {
+                    // TODO: maybe needs to be adapted as the one above
+                    allowedNamed.push(charClass);
+                }
+
             }
             else if (charClass instanceof CustomCharacterData) {
                 if (required) {
