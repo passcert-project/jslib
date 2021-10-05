@@ -625,7 +625,8 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
 
     private async generatePasswordInternal(passwordParameters: any): Promise<string> {
         let password = '';
-        let customMandatorySet;
+        let customMandatoryWithoutRangeSet;
+        let customMandatoryWithRangeSet;
 
         console.log("RULES PARSED => ", passwordParameters);
 
@@ -696,19 +697,35 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                     }
                 }
 
-                customMandatorySet = '';
+                customMandatoryWithoutRangeSet = '';
+                customMandatoryWithRangeSet = [];
                 for (let x of customConstraintsList) {
                     if (x.hasOwnProperty('characters')) {
-                        customMandatorySet += x.characters;
-                        for (let i = 0; i < x.minChars; i++) {
-                            //let randomRequiredChar = await this.cryptoService.randomNumber(0, x.characters.length - 1);
-                            positions.push('customMandatory');
+                        // has range, needs to be a specific set
+                        if (x.minChars !== undefined) {
+                            let obj: any = {};
+                            obj.minChars = x.minChars;
+                            obj.maxChars = x.maxChars;
+                            obj.chars = x.characters;
+                            customMandatoryWithRangeSet.push(obj);
+                            for (let i = 0; i < x.minChars; i++) {
+                                //let randomRequiredChar = await this.cryptoService.randomNumber(0, x.characters.length - 1);
+                                let index = customMandatoryWithRangeSet.length - 1;
+                                positions.push('customMandatoryIndex-' + index);
+                            }
+                        } else {
+                            // cannot join if they have ranges. If they don't have ranges, they are required, thus the minimum must be 1.
+                            customMandatoryWithoutRangeSet += x.characters;
+                            for (let i = 0; i < 1; i++) {
+                                //let randomRequiredChar = await this.cryptoService.randomNumber(0, x.characters.length - 1);
+                                positions.push('customMandatory');
+                            }
                         }
                     }
                 }
 
-                console.log("MANDATORY CHARS => ", customMandatorySet);
-
+                console.log("MANDATORY CHARS => ", customMandatoryWithoutRangeSet);
+                console.log("MANDATORY WITH RANGE => ", customMandatoryWithRangeSet);
                 // get the disjunct sets, pick a random number and remove it from the list.
                 // this removed set will be the one used in the password.
                 // the remaining sets need to be known to removed respective chars from the generation possibilities
@@ -717,20 +734,24 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                 console.log("disjunct LIST => ", disjunctList);
                 console.log("mandatory LIST => ", mandatoryList);
 
+                let chosenDisjunctSet: any = [];
+                let randomDisjunctNumber = -1;
                 // get a random number to select which chars will be chosen for the required value.
-                let randomDisjunctNumber = await this.cryptoService.randomNumber(0, disjunctList.length - 1);
-                console.log("RANDOM DISJUNCT NUMBER => ", randomDisjunctNumber);
-                let chosenDisjunctSet = Object.assign([], disjunctList);
-                chosenDisjunctSet = chosenDisjunctSet.splice(randomDisjunctNumber, 1);
-                console.log("CHOSEN => ", chosenDisjunctSet);
-                if (chosenDisjunctSet[0].minChars === undefined) {
-                    // no specific minChars range. Since it's required, the minimum should be 1
-                    // 128 is the max number of chars for Bitwarden's passwords
-                    chosenDisjunctSet[0].minChars = 1;
-                    chosenDisjunctSet[0].maxChars = 128;
-                }
-                for (let i = 0; i < chosenDisjunctSet[0].minChars; i++) {
-                    positions.push('customDisjunct');
+                if (disjunctList.length > 0) {
+                    randomDisjunctNumber = await this.cryptoService.randomNumber(0, disjunctList.length - 1);
+                    console.log("RANDOM DISJUNCT NUMBER => ", randomDisjunctNumber);
+                    chosenDisjunctSet = Object.assign([], disjunctList);
+                    chosenDisjunctSet = chosenDisjunctSet.splice(randomDisjunctNumber, 1);
+                    console.log("CHOSEN => ", chosenDisjunctSet);
+                    if (chosenDisjunctSet[0].minChars === undefined) {
+                        // no specific minChars range. Since it's required, the minimum should be 1
+                        // 128 is the max number of chars for Bitwarden's passwords
+                        chosenDisjunctSet[0].minChars = 1;
+                        chosenDisjunctSet[0].maxChars = 128;
+                    }
+                    for (let i = 0; i < chosenDisjunctSet[0].minChars; i++) {
+                        positions.push('customDisjunct');
+                    }
                 }
 
                 // fill the rest of the generation array
@@ -781,7 +802,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                 let disjunctCharsSet = '';
                 for (let setObj of disjunctList) {
                     console.log("SET OBJ DISJUNCT => ", setObj);
-                    console.log("LENGTH OBJ DISJUNCT => ", setObj.disjuncChars.length);
                     for (let i = 0; i < setObj.disjuncChars.length; i++) {
                         let idx = allCharSet.indexOf(setObj.disjuncChars[i]);
                         if (idx !== -1) {
@@ -821,7 +841,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
 
                 for (let setObj of mandatoryList) {
                     console.log("SET OBJ MANDATORY => ", setObj);
-                    console.log("LENGTH OBJ MANDATORY => ", setObj.characters.length);
                     for (let i = 0; i < setObj.characters.length; i++) {
                         let idx = allCharSet.indexOf(setObj.characters[i]);
                         if (idx !== -1) {
@@ -858,12 +877,13 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                         }
                     }
                 }
-
-                for (let i = 0; i < chosenDisjunctSet[0].disjuncChars.length; i++) {
-                    disjunctCharsSet += chosenDisjunctSet[0].disjuncChars[i];
+                if (disjunctList.length > 0) {
+                    for (let i = 0; i < chosenDisjunctSet[0].disjuncChars.length; i++) {
+                        disjunctCharsSet += chosenDisjunctSet[0].disjuncChars[i];
+                    }
+                    console.log("NEW CUSTOM SET => ", disjunctCharsSet);
                 }
 
-                console.log("NEW CUSTOM SET => ", disjunctCharsSet);
 
                 console.log("ALL SET => ", allCharSet);
 
@@ -874,33 +894,32 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
 
                 for (let i = 0; i < passwordParameters.length; i++) {
                     let positionChars: string;
-                    switch (positions[i]) {
-                        case 'l':
-                            positionChars = lowercaseCharSet;
-                            break;
-                        case 'u':
-                            positionChars = uppercaseCharSet;
-                            break;
-                        case 'n':
-                            positionChars = numberCharSet;
-                            break;
-                        case 's':
-                            positionChars = specialCharSet;
-                            break;
-                        case 'customDisjunct':
-                            // required disjunct
-                            positionChars = disjunctCharsSet;
-                            break;
-                        case 'customMandatory':
-                            // required mandatory
-                            positionChars = customMandatorySet;
-                            break;
-                        case 'a':
-                            positionChars = allCharSet;
-                            break;
-                        default:
-                            break;
+                    if (positions[i] === 'l') {
+                        positionChars = lowercaseCharSet;
                     }
+                    if (positions[i] === 'u') {
+                        positionChars = uppercaseCharSet;
+                    }
+                    if (positions[i] === 'n') {
+                        positionChars = numberCharSet;
+                    }
+                    if (positions[i] === 's') {
+                        positionChars = specialCharSet;
+                    }
+                    if (positions[i] === 'customDisjunct') {
+                        positionChars = disjunctCharsSet;
+                    }
+                    if (positions[i] === 'customMandatory') {
+                        positionChars = customMandatoryWithoutRangeSet;
+                    }
+                    if (positions[i].includes('-')) {
+                        let index = Number(positions[i].split('-')[1]);
+                        positionChars = customMandatoryWithRangeSet[index].chars;
+                    }
+                    if (positions[i] === 'a') {
+                        positionChars = allCharSet;
+                    }
+
 
                     console.log("POSITION CHARS => ", positionChars);
 
@@ -910,7 +929,10 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                 }
                 let customMandatoryObjList = customConstraintsList.filter(x => x.hasOwnProperty('characters'));
                 // remove the chosen disjunct class and keep the leftOver ones
-                disjunctList.splice(randomDisjunctNumber, 1);
+                if (disjunctList.length > 0) {
+                    disjunctList.splice(randomDisjunctNumber, 1);
+
+                }
                 let leftOverDisjunctList = disjunctList;
                 let isItCompliant = await this.checkPasswordCompliance(passwordParameters, password, customMandatoryObjList, chosenDisjunctSet, leftOverDisjunctList);
                 console.log("IS IT COMPLIANT ???? => ", isItCompliant);
@@ -1102,7 +1124,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
 
 
         let mandatoryCustomCharsPassed = true; // if all the custom required characters are present with acceptable frequence aka length
-        console.log("INPUTS => ", customMandatoryObjList, chosenDisjunctList, leftOverDisjunctList);
 
         let leftOverChars = '';
         let leftOverCharsPassed = true; // if none of the "not allowed" characters from case 'required:[a], [b];' are present in the password
@@ -1124,17 +1145,19 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         let chosenDisjunctCount = 0;
         let chosenDisjunctMinCharSum = 0;
         let chosenDisjunctMaxCharSum = 0;
-        for (let chosen of chosenDisjunctList) {
-            console.log("CHOSEN COMPLIANCE => ", chosen);
-            chosenDisjunctChars += chosen.disjuncChars;
-            chosenDisjunctMinCharSum += chosen.minChars;
-            chosenDisjunctMaxCharSum += chosen.maxChars;
+        if (chosenDisjunctList.length > 0) {
+            for (let chosen of chosenDisjunctList) {
+                console.log("CHOSEN COMPLIANCE => ", chosen);
+                chosenDisjunctChars += chosen.disjuncChars;
+                chosenDisjunctMinCharSum += chosen.minChars !== undefined ? chosen.minChars : 1;
+                chosenDisjunctMaxCharSum += chosen.maxChars !== undefined ? chosen.maxChars : 128;
 
-            for (let c of password) {
-                if (chosen.disjuncChars.includes(c)) {
-                    // check if the password contains any mandatory chars.
-                    // if so, add it to the count
-                    chosenDisjunctCount++;
+                for (let c of password) {
+                    if (chosen.disjuncChars.includes(c)) {
+                        // check if the password contains any mandatory chars.
+                        // if so, add it to the count
+                        chosenDisjunctCount++;
+                    }
                 }
             }
         }
@@ -1147,8 +1170,8 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         for (let mandatory of customMandatoryObjList) {
             console.log("MANDATORY => ", mandatory);
             mandatoryChars += mandatory.characters;
-            mandatoryMinCharSum += mandatory.minChars;
-            mandatoryMaxCharSum += mandatory.maxChars;
+            mandatoryMinCharSum += mandatory.minChars !== undefined ? mandatory.minChars : 1;
+            mandatoryMaxCharSum += mandatory.maxChars !== undefined ? mandatory.maxChars : 128;
 
             for (let c of password) {
                 if (mandatory.characters.includes(c)) {
