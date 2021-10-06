@@ -524,8 +524,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         let customMandatoryWithoutRangeSet;
         let customMandatoryWithRangeSet;
 
-        console.log("RULES PARSED => ", passwordParameters);
-
         // sanitize
         this.sanitizePasswordLength(passwordParameters, true);
 
@@ -568,37 +566,40 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                 disjunctNamedClasses = namedConstraintsList.filter(x => x.hasOwnProperty('disjuncClasses'));
                 let mandatoryNamedClass = [];
                 mandatoryNamedClass = namedConstraintsList.filter(x => x.hasOwnProperty('classes'));
-                let randomClassIndex = await this.cryptoService.randomNumber(0, disjunctNamedClasses.length - 1);
-                let chosenDisjunctNamedClass = Object.assign([], disjunctNamedClasses);
-                chosenDisjunctNamedClass = chosenDisjunctNamedClass.splice(randomClassIndex, 1);
-                console.log("DISJUNCT NAMED CLASSES => ", disjunctNamedClasses);
-                console.log("CHOSEN NAMED CLASS => ", chosenDisjunctNamedClass);
-                let leftOverNamedClasses = disjunctNamedClasses.filter(x => x.disjuncClasses !== chosenDisjunctNamedClass[0].disjuncClasses);
-                console.log("LEFT OVER NAMED CLASSES => ", leftOverNamedClasses);
-
-                // make the named class not available for usage, but setting it's boolean in the config to false
-                for (let dc of leftOverNamedClasses) {
-                    switch (dc.disjuncClasses) {
-                        case 'lower':
-                            passwordParameters.lowercase = false;
-                            passwordParameters.minLowercase = 0;
-                            break;
-                        case 'upper':
-                            passwordParameters.uppercase = false;
-                            passwordParameters.minUppercase = 0;
-                            break;
-                        case 'digit':
-                            passwordParameters.number = false;
-                            passwordParameters.minNumber = 0;
-                            break;
-                        case 'special':
-                            passwordParameters.special = false;
-                            passwordParameters.minSpecial = 0;
-                            break;
-                        default:
-                            break;
+                let chosenDisjunctNamedClass: any = [];
+                if (disjunctNamedClasses.length > 0) {
+                    let randomClassIndex = await this.cryptoService.randomNumber(0, disjunctNamedClasses.length - 1);
+                    chosenDisjunctNamedClass = Object.assign([], disjunctNamedClasses);
+                    chosenDisjunctNamedClass = chosenDisjunctNamedClass.splice(randomClassIndex, 1);
+                    console.log("DISJUNCT NAMED CLASSES => ", disjunctNamedClasses);
+                    console.log("CHOSEN NAMED CLASS => ", chosenDisjunctNamedClass);
+                    let leftOverNamedClasses = disjunctNamedClasses.filter(x => x.disjuncClasses !== chosenDisjunctNamedClass[0].disjuncClasses);
+                    console.log("LEFT OVER NAMED CLASSES => ", leftOverNamedClasses);
+                    // make the named class not available for usage, but setting it's boolean in the config to false
+                    for (let dc of leftOverNamedClasses) {
+                        switch (dc.disjuncClasses) {
+                            case 'lower':
+                                passwordParameters.lowercase = false;
+                                passwordParameters.minLowercase = 0;
+                                break;
+                            case 'upper':
+                                passwordParameters.uppercase = false;
+                                passwordParameters.minUppercase = 0;
+                                break;
+                            case 'digit':
+                                passwordParameters.number = false;
+                                passwordParameters.minNumber = 0;
+                                break;
+                            case 'special':
+                                passwordParameters.special = false;
+                                passwordParameters.minSpecial = 0;
+                                break;
+                            default:
+                                break;
+                        }
                     }
                 }
+
 
                 let customRule: RuleData;
                 let customCharsMinLength: number = 0;
@@ -627,8 +628,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                 }
 
                 console.log("CONSTRAINTS => ", customConstraintsList);
-                console.log("CUSTOM LENGTH => ", customCharsMinLength);
-                console.log("minlength => ", minLength + customCharsMinLength);
                 if (passwordParameters.length < minLength + customCharsMinLength + namedCharsMinLength) {
                     passwordParameters.length = minLength + customCharsMinLength + namedCharsMinLength;
                 }
@@ -699,7 +698,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                 // get a random number to select which chars will be chosen for the required value.
                 if (disjunctList.length > 0) {
                     randomDisjunctNumber = await this.cryptoService.randomNumber(0, disjunctList.length - 1);
-                    console.log("RANDOM DISJUNCT NUMBER => ", randomDisjunctNumber);
                     chosenDisjunctSet = Object.assign([], disjunctList);
                     chosenDisjunctSet = chosenDisjunctSet.splice(randomDisjunctNumber, 1);
                     console.log("CHOSEN => ", chosenDisjunctSet);
@@ -775,7 +773,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                 // remove the mandatory chars also, because they are already complying with minlength and minChars range
                 let disjunctCharsSet = '';
                 for (let setObj of disjunctList) {
-                    console.log("SET OBJ DISJUNCT => ", setObj);
                     for (let i = 0; i < setObj.disjuncChars.length; i++) {
                         let idx = allCharSet.indexOf(setObj.disjuncChars[i]);
                         if (idx !== -1) {
@@ -814,7 +811,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                 }
 
                 for (let setObj of mandatoryList) {
-                    console.log("SET OBJ MANDATORY => ", setObj);
                     for (let i = 0; i < setObj.characters.length; i++) {
                         let idx = allCharSet.indexOf(setObj.characters[i]);
                         if (idx !== -1) {
@@ -860,8 +856,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
 
 
                 console.log("ALL SET => ", allCharSet);
-
-                console.log("POSITIONS => ", positions);
 
                 // TODO: this may be optimized, possibly. Count each letter that's going to be replaced and verify which class it belongs to - upper, lower, special, digit. 
                 // If the number of included chars of a given class is greater than the maxValue for that class, do not add it, and remove all chars from that class from the "allCharSet". This way, avoid greater times with constant trail and error.
@@ -1019,7 +1013,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         // - blocklist
         // - minclasses
         // if one of them is noncompliant, call the method again
-        console.log("passwordConstraints => ", passwordConstraints);
         let passedBlocklistConstraints = true; // assuming the pw generated never hits the blocklist.
         let passedMinClassesConstraints = false;
         let passedRangeConstraints = true; // assuming the pw generated checks all constraints. Easier to turn to false when it doesn't.
@@ -1120,7 +1113,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         let chosenDisjunctMaxCharSum = 0;
         if (chosenDisjunctList.length > 0) {
             for (let chosen of chosenDisjunctList) {
-                console.log("CHOSEN COMPLIANCE => ", chosen);
                 chosenDisjunctChars += chosen.disjuncChars;
                 chosenDisjunctMinCharSum += chosen.minChars !== undefined ? chosen.minChars : 1;
                 chosenDisjunctMaxCharSum += chosen.maxChars !== undefined ? chosen.maxChars : 128;
@@ -1141,7 +1133,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         let mandatoryMinCharSum = 0;
         let mandatoryMaxCharSum = 0;
         for (let mandatory of customMandatoryObjList) {
-            console.log("MANDATORY => ", mandatory);
             mandatoryChars += mandatory.characters;
             mandatoryMinCharSum += mandatory.minChars !== undefined ? mandatory.minChars : 1;
             mandatoryMaxCharSum += mandatory.maxChars !== undefined ? mandatory.maxChars : 128;
@@ -1154,9 +1145,7 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                 }
             }
         }
-        console.log("SUM => ", mandatoryCount + chosenDisjunctCount);
-        console.log("SUM MIN CHARS => ", mandatoryMinCharSum + chosenDisjunctMinCharSum);
-        console.log("SUM MAX CHARS => ", mandatoryMaxCharSum + chosenDisjunctMaxCharSum);
+
         console.log({ mandatoryChars });
         console.log({ chosenDisjunctChars });
         if (mandatoryCount + chosenDisjunctCount < mandatoryMinCharSum + chosenDisjunctMinCharSum || mandatoryCount + chosenDisjunctCount > mandatoryMaxCharSum + chosenDisjunctMaxCharSum) {
@@ -1200,9 +1189,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         console.log({ upperInPw });
         console.log({ numberInPw });
         console.log({ specialInPw });
-        console.log(passwordConstraints);
-        console.log("passwordConstraints.minLowercase", passwordConstraints.minLowercase);
-        console.log("passwordConstraints.maxLowercase", passwordConstraints.maxLowercase);
 
         if (lowerInPw.length < passwordConstraints.minLowercase || lowerInPw.length > passwordConstraints.maxLowercase) {
             console.log("LOWER FAILED");
