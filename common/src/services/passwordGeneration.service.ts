@@ -1033,6 +1033,7 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                 break;
             }
         }
+        //TODO: blocklist with HIBP...
         console.log("PASSBLOCKLIST => ", passedBlocklistConstraints);
 
         // check for the minclasses constraint
