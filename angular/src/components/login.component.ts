@@ -122,7 +122,7 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
             //since it's an async call.
             this.clearArrayBufferToDEAD(masterPasswordBufferView);
            
-            console.log('After-clean:' + Utils.fromBufferToUtf8(this.masterPasswordBuffer));
+            //console.log('After-clean:' + Utils.fromBufferToUtf8(this.masterPasswordBuffer));
 
             await this.storageService.save(Keys.rememberEmail, this.rememberEmail);
             if (this.rememberEmail) {
