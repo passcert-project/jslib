@@ -628,8 +628,9 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
                 }
 
                 console.log("CONSTRAINTS => ", customConstraintsList);
-                if (passwordParameters.length < minLength + customCharsMinLength + namedCharsMinLength) {
-                    passwordParameters.length = minLength + customCharsMinLength + namedCharsMinLength;
+
+                if (passwordParameters.length < minLength) {
+                    passwordParameters.length = minLength;
                 }
 
                 const positions: string[] = [];
