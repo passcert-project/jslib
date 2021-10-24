@@ -56,7 +56,7 @@
     "@bitwarden/jslib-common": "file:common",
     "@bitwarden/jslib-electron": "file:electron",
     "@bitwarden/jslib-node": "file:node",
-    "@passcert/pwrules-annotations": "^1.1.0"
+    "@passcert/pwrules-annotations": "^2.0.1"
   },
   "engines": {
     "node": "~14",

@@ -16,7 +16,6 @@ import { EEFLongWordList } from '../misc/wordlist';
 
 import { PolicyType } from '../enums/policyType';
 import { CustomCharacterData, NamedCharacterData, RuleData } from '@passcert/pwrules-annotations';
-import { ConsoleLogger } from '@microsoft/signalr/dist/esm/Utils';
 
 const DefaultOptions = {
     length: 14,
