@@ -59,28 +59,6 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
             o = Object.assign({}, DefaultOptions, this.smartPasswordOptions);
             console.log("these are the default smartpassword -> ", o);
         } else {
-            this.smartPasswordOptions = {
-                                            length: 14,
-                                            number: true,
-                                            minNumber: 1,
-                                            uppercase: true,
-                                            minUppercase: 1,
-                                            lowercase: true,
-                                            minLowercase: 1,
-                                            special: false,
-                                            minSpecial: 0,
-                                            type: 'smartpassword',
-                                            minLength: 14,
-                                            maxLength: 14,
-                                            reqNumber: true,
-                                            reqUpper: true,
-                                            reqLower: true,
-                                            reqSpecial: false,
-                                            allowedNumber: true,
-                                            allowedUpper: true,
-                                            allowedLower: true,
-                                            allowedSpecial: false,
-                                        };
             o = Object.assign({}, DefaultOptions, this.smartPasswordOptions);
         }
 
@@ -90,6 +68,7 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         let password: string;
         let pwPolicy = this.parsePolicyForPasscertGenerator(o);
         // At request level
+        // Use this if self signed certificate error
         const agent = new https.Agent({  
           rejectUnauthorized: false
         });
