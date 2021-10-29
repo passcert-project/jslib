@@ -19,20 +19,14 @@ import * as https from 'https';
 import axios from 'axios';
 const DefaultOptions = {
     length: 14,
-    ambiguous: false,
-    number: true,
-    minNumber: 1,
-    uppercase: true,
-    minUppercase: 0,
-    lowercase: true,
-    minLowercase: 0,
-    special: false,
+    minLowercase: 1,
+    maxLowercase: 14,
+    minUppercase: 1,
+    maxUppercase: 14,
+    minNumbers: 1,
+    maxNumbers: 14,
     minSpecial: 1,
-    type: 'password',
-    numWords: 3,
-    wordSeparator: '-',
-    capitalize: false,
-    includeNumber: false,
+    maxSpecial: 14
 };
 
 const Keys = {
@@ -59,12 +53,9 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
             o = Object.assign({}, DefaultOptions, this.smartPasswordOptions);
             console.log("these are the default smartpassword -> ", o);
         } else {
-            o = Object.assign({}, DefaultOptions, this.smartPasswordOptions);
+            o = Object.assign({}, options, this.smartPasswordOptions);
         }
 
-
-        //console.log("WEBSITE PASSWORD CONSTRAINT -> ", this.smartPasswordOptions);
-        //console.log("I RECEIVED THIS -> ", options);
         let password: string;
         let pwPolicy = this.parsePolicyForPasscertGenerator(o);
         // At request level
@@ -74,164 +65,31 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         });
         await axios.post('https://localhost:5000/generate', {pw_settings: pwPolicy}, { httpsAgent: agent }).then(res => {
             password = res.data.generated_password;
-            //console.log("RECEIVED THIS FROM THE SERVER => ", res.data.generated_password);
         }).catch(error => {
             console.log("ERROR => ", error)
         });
-        //console.log("THIS IS THE PASSWORD @ SERVICE => ", password);
         return password;
-        /* let o: any;
-        if (options['type'] === 'smartpassword') {
-            console.log("Client wants a smartpassword");
-            o = Object.assign({}, DefaultOptions, this.smartPasswordOptions);
-            console.log("these are the default smartpassword -> ", o);
-        } else {
-            o = Object.assign({}, DefaultOptions, options);
-        }
-
-        if (o.type === 'passphrase') {
-            return this.generatePassphrase(options);
-        }
-
-        // sanitize
-        this.sanitizePasswordLength(o, true);
-
-        const minLength: number = o.minUppercase + o.minLowercase + o.minNumber + o.minSpecial;
-        if (o.length < minLength) {
-            o.length = minLength;
-        }
-
-        const positions: string[] = [];
-        if (o.lowercase && o.minLowercase > 0) {
-            for (let i = 0; i < o.minLowercase; i++) {
-                positions.push('l');
-            }
-        }
-        if (o.uppercase && o.minUppercase > 0) {
-            for (let i = 0; i < o.minUppercase; i++) {
-                positions.push('u');
-            }
-        }
-        if (o.number && o.minNumber > 0) {
-            for (let i = 0; i < o.minNumber; i++) {
-                positions.push('n');
-            }
-        }
-        if (o.special && o.minSpecial > 0) {
-            for (let i = 0; i < o.minSpecial; i++) {
-                positions.push('s');
-            }
-        }
-        while (positions.length < o.length) {
-            positions.push('a');
-        }
-
-        // shuffle
-        await this.shuffleArray(positions);
-
-        // build out the char sets
-        let allCharSet = '';
-        let lowercaseCharSet = 'abcdefghijkmnopqrstuvwxyz';
-        if (o.ambiguous) {
-            lowercaseCharSet += 'l';
-        }
-        if (o.lowercase) {
-            allCharSet += lowercaseCharSet;
-        }
-
-        let uppercaseCharSet = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-        if (o.ambiguous) {
-            uppercaseCharSet += 'IO';
-        }
-        if (o.uppercase) {
-            allCharSet += uppercaseCharSet;
-        }
-
-        let numberCharSet = '23456789';
-        if (o.ambiguous) {
-            numberCharSet += '01';
-        }
-        if (o.number) {
-            allCharSet += numberCharSet;
-        }
-
-        const specialCharSet = '!@#$%^&*';
-        if (o.special) {
-            allCharSet += specialCharSet;
-        }
-
-        let password = '';
-        for (let i = 0; i < o.length; i++) {
-            let positionChars: string;
-            switch (positions[i]) {
-                case 'l':
-                    positionChars = lowercaseCharSet;
-                    break;
-                case 'u':
-                    positionChars = uppercaseCharSet;
-                    break;
-                case 'n':
-                    positionChars = numberCharSet;
-                    break;
-                case 's':
-                    positionChars = specialCharSet;
-                    break;
-                case 'a':
-                    positionChars = allCharSet;
-                    break;
-                default:
-                    break;
-            }
-
-            const randomCharIndex = await this.cryptoService.randomNumber(0, positionChars.length - 1);
-            password += positionChars.charAt(randomCharIndex);
-        }
-
-        return password; */
     }
 
     private parsePolicyForPasscertGenerator(options: any): string {
         let policyBuilder: string;
         policyBuilder = `${options.length} `;
-
-        policyBuilder += options.lowercase ? `${options.minLowercase} ${options.length} ` : `0 0 `;
-        policyBuilder += options.uppercase ? `${options.minUppercase} ${options.length} ` : `0 0 `;
-        policyBuilder += options.number ? `${options.minNumber} ${options.length} ` : `0 0 `;
-        policyBuilder += options.special ? `${options.minSpecial} ${options.length}` : `0 0`;
-        //console.log("parsedPolicyForPasscert => ", policyBuilder);
+        policyBuilder += `${options.minLowercase} `;
+        policyBuilder += `${options.maxLowercase} `;
+        policyBuilder += `${options.minUppercase} `;
+        policyBuilder += `${options.maxUppercase} `;
+        policyBuilder += `${options.minNumbers} `;
+        policyBuilder += `${options.maxNumbers} `;
+        policyBuilder += `${options.minSpecial} `;
+        policyBuilder += `${options.maxSpecial}`;
         return policyBuilder;
     }
 
     async generatePassphrase(options: any): Promise<string> {
         const o = Object.assign({}, DefaultOptions, options);
 
-        if (o.numWords == null || o.numWords <= 2) {
-            o.numWords = DefaultOptions.numWords;
-        }
-        if (o.wordSeparator == null || o.wordSeparator.length === 0 || o.wordSeparator.length > 1) {
-            o.wordSeparator = ' ';
-        }
-        if (o.capitalize == null) {
-            o.capitalize = false;
-        }
-        if (o.includeNumber == null) {
-            o.includeNumber = false;
-        }
-
         const listLength = EEFLongWordList.length - 1;
         const wordList = new Array(o.numWords);
-        for (let i = 0; i < o.numWords; i++) {
-            const wordIndex = await this.cryptoService.randomNumber(0, listLength);
-            if (o.capitalize) {
-                wordList[i] = this.capitalize(EEFLongWordList[wordIndex]);
-            } else {
-                wordList[i] = EEFLongWordList[wordIndex];
-            }
-        }
-
-        if (o.includeNumber) {
-            await this.appendRandomNumberToRandomWord(wordList);
-        }
         return wordList.join(o.wordSeparator);
     }
 
