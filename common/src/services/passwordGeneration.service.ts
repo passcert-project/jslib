@@ -63,8 +63,8 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         }
 
 
-        console.log("WEBSITE PASSWORD CONSTRAINT -> ", this.smartPasswordOptions);
-        console.log("I RECEIVED THIS -> ", options);
+        //console.log("WEBSITE PASSWORD CONSTRAINT -> ", this.smartPasswordOptions);
+        //console.log("I RECEIVED THIS -> ", options);
         let password: string;
         let pwPolicy = this.parsePolicyForPasscertGenerator(o);
         // At request level
@@ -74,11 +74,11 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         });
         await axios.post('https://localhost:5000/generate', {pw_settings: pwPolicy}, { httpsAgent: agent }).then(res => {
             password = res.data.generated_password;
-            console.log("RECEIVED THIS FROM THE SERVER => ", res.data.generated_password);
+            //console.log("RECEIVED THIS FROM THE SERVER => ", res.data.generated_password);
         }).catch(error => {
             console.log("ERROR => ", error)
         });
-        console.log("THIS IS THE PASSWORD @ SERVICE => ", password);
+        //console.log("THIS IS THE PASSWORD @ SERVICE => ", password);
         return password;
         /* let o: any;
         if (options['type'] === 'smartpassword') {
@@ -198,7 +198,7 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
         policyBuilder += options.uppercase ? `${options.minUppercase} ${options.length} ` : `0 0 `;
         policyBuilder += options.number ? `${options.minNumber} ${options.length} ` : `0 0 `;
         policyBuilder += options.special ? `${options.minSpecial} ${options.length}` : `0 0`;
-        console.log("parsePolicyForPasscert => ", policyBuilder);
+        //console.log("parsedPolicyForPasscert => ", policyBuilder);
         return policyBuilder;
     }
 
@@ -268,7 +268,7 @@ export class PasswordGenerationService implements PasswordGenerationServiceAbstr
     }
 
     async enforcePasswordGeneratorPoliciesOnOptions(options: any): Promise<[any, PasswordGeneratorPolicyOptions]> {
-        console.log("enforced Password Generator -> ", options);
+        //console.log("enforced Password Generator -> ", options);
         let enforcedPolicyOptions = await this.getPasswordGeneratorPolicyOptions();
         if (enforcedPolicyOptions != null) {
             if (options.type === 'smartpassword') {
