@@ -3,7 +3,12 @@ import {
     Input,
     OnDestroy,
     OnInit,
+    forwardRef
 } from '@angular/core';
+
+import { ControlValueAccessor, FormControl, NG_VALUE_ACCESSOR } from '@angular/forms';
+
+
 
 import { Router } from '@angular/router';
 
@@ -29,13 +34,22 @@ const Keys = {
     rememberEmail: 'rememberEmail',
 };
 
-@Directive()
-export class LoginComponent extends CaptchaProtectedComponent implements OnInit, OnDestroy {
+@Directive(
+    {
+        providers: [
+            {
+                provide: NG_VALUE_ACCESSOR,
+                useExisting: forwardRef(() => LoginComponent),
+                multi: true
+            }
+        ]
+    }
+)
+export class LoginComponent extends CaptchaProtectedComponent implements OnInit, OnDestroy, ControlValueAccessor {
     @Input() email: string = '';
     @Input() rememberEmail = true;
 
-    //masterPassword: string = '';
-    masterPasswordBuffer : ArrayBuffer;
+    masterPasswordBuffer: ArrayBuffer;
     showPassword: boolean = false;
     formPromise: Promise<AuthResult>;
     onSuccessfulLogin: () => Promise<any>;
@@ -97,17 +111,7 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
                 this.i18nService.t('masterPassRequired'));
             return;
         }
-        
-        /*#region NOTE: Old method. Now the child component takes care of it 
-            //Copy the Master Password into a mutable data structure as soon as possible
-            //let masterPasswordBuffer: ArrayBuffer; 
-            //masterPasswordBuffer = Utils.fromUtf8ToArray(this.masterPassword).buffer;
 
-            //Once we have the password in the buffer, we don't need to keep it referenced. Hopefully the GC picks it up soon.
-            //Though not guaranteed :(
-            //TODO: This technically should no longer be needed since we don't actually touch the user input in this component (for the pass at least)
-            this.masterPassword = null;
-        */
 
         let masterPasswordBufferView = new Uint8Array(this.masterPasswordBuffer);
 
@@ -121,7 +125,7 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
             //NOTE: Clearing password buffer here since it's needed anymore. It has to be after we receive the answer from the response
             //since it's an async call.
             this.clearArrayBufferToDEAD(masterPasswordBufferView);
-           
+
             //console.log('After-clean:' + Utils.fromBufferToUtf8(this.masterPasswordBuffer));
 
             await this.storageService.save(Keys.rememberEmail, this.rememberEmail);
@@ -228,14 +232,61 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
         }
     }
 
-    receivePass(masterpass : ArrayBuffer)
-    {
+    receivePass(masterpass: ArrayBuffer) {
         this.masterPasswordBuffer = masterpass;
-        
+
         const arrayBufferView = new Uint8Array(this.masterPasswordBuffer);
 
         //console.log('Received pass from child: ' + arrayBufferView);
 
         this.submit();
     }
+
+    //#region ControlValueAcessor
+    //NOTE:This needs to be here because the NGModel has to bind to something. It's never actually written to
+    dummyInput : string;
+
+    // Step 3: Copy paste this stuff here
+    onChange: any = () => { }
+    onTouch: any = () => { }
+    registerOnChange(fn: any): void {
+        this.onChange = fn;
+    }
+    registerOnTouched(fn: any): void {
+        this.onTouch = fn;
+    }
+
+    // Step 4: Define what should happen in this component, if something changes outside
+    writeValue(_input: string) {
+        //Empty on purpose
+    }
+
+    // Step 5: Handle what should happen on the outside, if something changes on the inside
+    // in this simple case, we've handled all of that in the .html
+    // a) we've bound to the local variable with ngModel
+    // b) we emit to the ouside by calling onChange on ngModelChange
+
+    onInsideChange(receivedString: string) {
+        //console.log('ReceivedString: ' + receivedString);
+
+        //Clear previous ArrayBuffer
+        let inputArrayView = new Uint8Array(this.masterPasswordBuffer);
+        //console.log('inputArrayView: Pre-Clear:' + inputArrayView);
+
+        //Clear the previous ArrayBuffer (that contained the old stored password)
+        inputArrayView.fill(0);
+
+        //console.log('inputArrayView: After-Clear:' + inputArrayView);
+
+
+        //Note: important to assing the underlying buffer instead of the view :)
+        //TODO: Inline this function and see if it makes a difference. In theory this creates a new string reference so rip
+        this.masterPasswordBuffer = Utils.fromUtf8ToArray(receivedString).buffer;
+
+        inputArrayView = new Uint8Array(this.masterPasswordBuffer);
+        //console.log('inputArrayView: After-String:' + inputArrayView);
+
+        this.onChange(this.masterPasswordBuffer);
+    }
+
 }
