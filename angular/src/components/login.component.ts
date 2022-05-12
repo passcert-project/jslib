@@ -8,12 +8,8 @@ import {
 
 import { ControlValueAccessor, FormControl, NG_VALUE_ACCESSOR } from '@angular/forms';
 
-
-
 import { Router } from '@angular/router';
-
 import { AuthResult } from 'jslib-common/models/domain/authResult';
-
 import { AuthService } from 'jslib-common/abstractions/auth.service';
 import { CryptoFunctionService } from 'jslib-common/abstractions/cryptoFunction.service';
 import { EnvironmentService } from 'jslib-common/abstractions/environment.service';
@@ -105,28 +101,23 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
             return;
         }
 
-        //Check the arraypass we get from the child instead
+        //Check the ArrayBuffer containing the password
         if (this.masterPasswordBuffer == null || this.masterPasswordBuffer.byteLength === 0) {
             this.platformUtilsService.showToast('error', this.i18nService.t('errorOccurred'),
                 this.i18nService.t('masterPassRequired'));
             return;
         }
 
-
         let masterPasswordBufferView = new Uint8Array(this.masterPasswordBuffer);
 
         try {
-            //this.formPromise = this.authService.logIn(this.email, this.masterPassword);
-            //console.log('AuthService: ' + this.authService);
             this.formPromise = this.authService.logInWithArrayBuffer(this.email, this.masterPasswordBuffer);
 
             const response = await this.formPromise;
 
-            //NOTE: Clearing password buffer here since it's needed anymore. It has to be after we receive the answer from the response
+            //NOTE: Clearing password buffer here since i's not needed anymore. It has to be after we receive the answer from the response
             //since it's an async call.
             this.clearArrayBufferToDEAD(masterPasswordBufferView);
-
-            //console.log('After-clean:' + Utils.fromBufferToUtf8(this.masterPasswordBuffer));
 
             await this.storageService.save(Keys.rememberEmail, this.rememberEmail);
             if (this.rememberEmail) {
@@ -161,7 +152,7 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
                 }
             }
         } catch (error) {
-            console.error('THERE WAS AN EXCEPTION: ' + error);
+            console.error('There was an exception: ' + error);
         }
     }
 
@@ -234,11 +225,6 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
 
     receivePass(masterpass: ArrayBuffer) {
         this.masterPasswordBuffer = masterpass;
-
-        const arrayBufferView = new Uint8Array(this.masterPasswordBuffer);
-
-        //console.log('Received pass from child: ' + arrayBufferView);
-
         this.submit();
     }
 
@@ -246,7 +232,7 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
     //NOTE:This needs to be here because the NGModel has to bind to something. It's never actually written to
     dummyInput : string;
 
-    // Step 3: Copy paste this stuff here
+    // Step 3:
     onChange: any = () => { }
     onTouch: any = () => { }
     registerOnChange(fn: any): void {
@@ -258,7 +244,7 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
 
     // Step 4: Define what should happen in this component, if something changes outside
     writeValue(_input: string) {
-        //Empty on purpose
+        //Empty on purpose as no external component should change the password
     }
 
     // Step 5: Handle what should happen on the outside, if something changes on the inside
@@ -267,26 +253,33 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
     // b) we emit to the ouside by calling onChange on ngModelChange
 
     onInsideChange(receivedString: string) {
-        //console.log('ReceivedString: ' + receivedString);
-
-        //Clear previous ArrayBuffer
         let inputArrayView = new Uint8Array(this.masterPasswordBuffer);
-        //console.log('inputArrayView: Pre-Clear:' + inputArrayView);
 
         //Clear the previous ArrayBuffer (that contained the old stored password)
         inputArrayView.fill(0);
-
-        //console.log('inputArrayView: After-Clear:' + inputArrayView);
-
-
-        //Note: important to assing the underlying buffer instead of the view :)
-        //TODO: Inline this function and see if it makes a difference. In theory this creates a new string reference so rip
-        this.masterPasswordBuffer = Utils.fromUtf8ToArray(receivedString).buffer;
-
+    
+        //Note: important to assign the underlying buffer instead of the view, 
+        //Note: This function is inlined. Having a function call here makes another reference
+        //and according to some testing it does seem to make it better somewhat?
+        //But still very close compared to the normal extension
+        
+        
+        
+        //Note: testing an inline method and seeing if it works
+        if (Utils.isNode || Utils.isNativeScript) {
+            this.masterPasswordBuffer = new Uint8Array(Buffer.from(receivedString, 'utf8')).buffer;
+        } else {
+            const strUtf8 = unescape(encodeURIComponent(receivedString));
+            const arr = new Uint8Array(strUtf8.length);
+            for (let i = 0; i < strUtf8.length; i++) {
+                arr[i] = strUtf8.charCodeAt(i);
+            }
+            this.masterPasswordBuffer = arr.buffer;
+        }
+        
         inputArrayView = new Uint8Array(this.masterPasswordBuffer);
-        //console.log('inputArrayView: After-String:' + inputArrayView);
 
+        //Announce the change
         this.onChange(this.masterPasswordBuffer);
     }
-
 }
