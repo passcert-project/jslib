@@ -97,32 +97,18 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
                 this.i18nService.t('masterPassRequired'));
             return;
         }
-        
-        /*#region NOTE: Old method. Now the child component takes care of it 
-            //Copy the Master Password into a mutable data structure as soon as possible
-            //let masterPasswordBuffer: ArrayBuffer; 
-            //masterPasswordBuffer = Utils.fromUtf8ToArray(this.masterPassword).buffer;
-
-            //Once we have the password in the buffer, we don't need to keep it referenced. Hopefully the GC picks it up soon.
-            //Though not guaranteed :(
-            //TODO: This technically should no longer be needed since we don't actually touch the user input in this component (for the pass at least)
-            this.masterPassword = null;
-        */
-
-        let masterPasswordBufferView = new Uint8Array(this.masterPasswordBuffer);
 
         try {
             //this.formPromise = this.authService.logIn(this.email, this.masterPassword);
-            //console.log('AuthService: ' + this.authService);
             this.formPromise = this.authService.logInWithArrayBuffer(this.email, this.masterPasswordBuffer);
 
             const response = await this.formPromise;
 
             //NOTE: Clearing password buffer here since it's needed anymore. It has to be after we receive the answer from the response
             //since it's an async call.
+            let masterPasswordBufferView = new Uint8Array(this.masterPasswordBuffer);
             this.clearArrayBufferToDEAD(masterPasswordBufferView);
-           
-            //console.log('After-clean:' + Utils.fromBufferToUtf8(this.masterPasswordBuffer));
+            masterPasswordBufferView = null;
 
             await this.storageService.save(Keys.rememberEmail, this.rememberEmail);
             if (this.rememberEmail) {
@@ -157,7 +143,7 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
                 }
             }
         } catch (error) {
-            console.error('THERE WAS AN EXCEPTION: ' + error);
+            console.error('There was an exception: ' + error);
         }
     }
 
@@ -232,10 +218,6 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
     {
         this.masterPasswordBuffer = masterpass;
         
-        const arrayBufferView = new Uint8Array(this.masterPasswordBuffer);
-
-        //console.log('Received pass from child: ' + arrayBufferView);
-
         this.submit();
     }
 }
