@@ -259,13 +259,10 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
         inputArrayView.fill(0);
     
         //Note: important to assign the underlying buffer instead of the view, 
+        
         //Note: This function is inlined. Having a function call here makes another reference
         //and according to some testing it does seem to make it better somewhat?
         //But still very close compared to the normal extension
-        
-        
-        
-        //Note: testing an inline method and seeing if it works
         if (Utils.isNode || Utils.isNativeScript) {
             this.masterPasswordBuffer = new Uint8Array(Buffer.from(receivedString, 'utf8')).buffer;
         } else {
@@ -276,8 +273,6 @@ export class LoginComponent extends CaptchaProtectedComponent implements OnInit,
             }
             this.masterPasswordBuffer = arr.buffer;
         }
-        
-        inputArrayView = new Uint8Array(this.masterPasswordBuffer);
 
         //Announce the change
         this.onChange(this.masterPasswordBuffer);
